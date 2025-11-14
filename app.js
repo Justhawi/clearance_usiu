@@ -87,28 +87,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const page = document.body.dataset.page || 'home';
 
   if (page === 'home') {
+    // Set up buttons immediately
+    setupHomeButtons();
+    
     initialiseHomePage();
-    // Fallback: ensure buttons are set up even if there's a delay
+    
+    // Fallback: ensure buttons are set up again after a short delay
     setTimeout(() => {
       console.log('Fallback: Setting up buttons again');
       setupHomeButtons();
-      
-      // Test: Try to manually trigger click to verify buttons work
-      const testButtons = document.querySelectorAll('[data-action="open-login"]');
-      console.log('Test: Found', testButtons.length, 'login buttons');
-      testButtons.forEach((btn, idx) => {
-        console.log(`Test: Button ${idx}:`, btn, 'Has handler:', btn.hasAttribute('data-handler-setup'));
-      });
-    }, 500);
+    }, 300);
     
-    // Immediate test after a short delay
-    setTimeout(() => {
-      const testBtn = document.querySelector('[data-action="open-login"]');
-      if (testBtn) {
-        console.log('Quick test: Button found, testing direct call');
-        // Don't actually call, just verify it exists
-      }
-    }, 100);
+    // Another fallback after page fully loads
+    window.addEventListener('load', () => {
+      console.log('Window loaded: Setting up buttons one more time');
+      setupHomeButtons();
+    });
   }
 
   onAuthStateChanged(auth, async (user) => {
@@ -223,31 +217,45 @@ function setupHomeButtons() {
   console.log('Setting up home buttons, found:', loginButtons.length);
   
   loginButtons.forEach((button, index) => {
-    if (!(button instanceof HTMLAnchorElement || button instanceof HTMLButtonElement)) {
-      console.warn('Button', index, 'is not a valid anchor or button element');
+    if (!button) {
+      console.warn('Button', index, 'is null or undefined');
       return;
     }
+    
+    // Ensure button is visible and clickable
+    button.style.pointerEvents = 'auto';
+    button.style.cursor = 'pointer';
+    button.style.position = 'relative';
+    button.style.zIndex = '10';
+    button.style.userSelect = 'none';
     
     // Store default label if not already stored
     if (!button.dataset.defaultLabel) {
       button.dataset.defaultLabel = button.textContent?.trim() || 'Log In';
     }
     
-    // Remove any existing handlers by cloning (clean slate)
+    // Remove any existing handlers by cloning
+    let buttonToSetup = button;
     if (button.hasAttribute('data-handler-setup')) {
-      console.log('Button already set up, skipping');
-      return;
+      const newButton = button.cloneNode(true);
+      button.parentNode?.replaceChild(newButton, button);
+      buttonToSetup = newButton;
+      buttonToSetup.removeAttribute('data-handler-setup');
     }
     
-    button.setAttribute('data-handler-setup', 'true');
+    buttonToSetup.setAttribute('data-handler-setup', 'true');
     
-    console.log('Setting up click handler for button:', button.textContent?.trim());
+    console.log('Setting up click handler for button:', buttonToSetup.textContent?.trim());
     
-    // Simple, direct click handler
-    button.onclick = function(event) {
-      console.log('=== BUTTON CLICKED ===');
+    // Remove any existing onclick to avoid conflicts
+    buttonToSetup.onclick = null;
+    
+    // Add multiple event handlers for maximum compatibility
+    const handleClick = function(event) {
+      console.log('=== BUTTON CLICKED ===', buttonToSetup.textContent?.trim());
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
       
       console.log('Current user:', currentUser);
       console.log('Current profile:', currentProfile);
@@ -263,14 +271,19 @@ function setupHomeButtons() {
       return false;
     };
     
-    // Also add addEventListener as backup
-    button.addEventListener('click', function(event) {
-      console.log('addEventListener click fired');
-      if (!currentUser || !currentProfile) {
-        event.preventDefault();
-        openLoginModal();
-      }
-    });
+    // Add both capture and bubble phase listeners
+    buttonToSetup.addEventListener('click', handleClick, true);
+    buttonToSetup.addEventListener('click', handleClick, false);
+    
+    // Also set onclick as direct fallback
+    buttonToSetup.onclick = handleClick;
+    
+    // Ensure href works as fallback
+    if (buttonToSetup instanceof HTMLAnchorElement) {
+      buttonToSetup.href = '#';
+    }
+    
+    console.log('Button setup complete for:', buttonToSetup.textContent?.trim());
   });
 }
 
@@ -412,6 +425,8 @@ function openLoginModal() {
   modal.classList.add('active');
   modal.style.display = 'flex';
   modal.style.zIndex = '1000';
+  modal.style.visibility = 'visible';
+  modal.style.opacity = '1';
   
   console.log('Modal should now be visible');
   
@@ -420,6 +435,9 @@ function openLoginModal() {
     window.lucide.createIcons();
   }
 }
+
+// Make function globally available for inline onclick handlers
+window.openLoginModal = openLoginModal;
 
 function closeLoginModal() {
   const modal = document.querySelector('#loginModal');
@@ -730,10 +748,26 @@ function setupCertificateFeatures() {
 
   printBtn?.addEventListener('click', printCertificate);
   downloadBtn?.addEventListener('click', downloadCertificate);
-  alumniBtn?.addEventListener('click', () => {
-    window.open('https://alumni.usiu.ac.ke/register', '_blank');
-    showToast('Opening alumni registration page...');
-  });
+  
+  // Set up alumni button/link with multiple approaches to ensure it works
+  if (alumniBtn) {
+    // Ensure href is set correctly
+    const url = 'https://cx.usiu.ac.ke/ICS/Alumni/Home.jnz?portlet=Registration';
+    alumniBtn.setAttribute('href', url);
+    alumniBtn.setAttribute('target', '_blank');
+    alumniBtn.setAttribute('rel', 'noopener noreferrer');
+    
+    // Add click handler for toast notification (href will still work as fallback)
+    alumniBtn.addEventListener('click', (e) => {
+      console.log('Opening alumni registration:', url);
+      showToast('Opening alumni registration page...');
+      // Don't prevent default - let the href work naturally
+    });
+    
+    console.log('Alumni button/link set up successfully');
+  } else {
+    console.warn('Alumni button not found');
+  }
 }
 
 function updateStudentProgressChart(requests) {
@@ -986,10 +1020,10 @@ function hideCertificateSections() {
 
 function generateQRCode(approvedRequest) {
   console.log('generateQRCode called with request:', approvedRequest?.id);
-
+  
   const container = document.querySelector('#qrCodeContainer');
   const studentIdEl = document.querySelector('#qrStudentId');
-
+  
   if (!container) {
     console.warn('QR code container not found');
     return;
@@ -997,165 +1031,151 @@ function generateQRCode(approvedRequest) {
 
   if (!approvedRequest) {
     console.warn('No approved request provided for QR code generation');
-    container.innerHTML = '<p style="color: #666; padding: 20px;">No approved request found.</p>';
+    container.innerHTML = '<p style="color: #666; padding: 20px; text-align: center;">No approved request found.</p>';
     return;
   }
 
-  // Clear existing QR code
-  container.innerHTML = '<p style="color: #666; padding: 20px;">Generating QR code...</p>';
+  // Make sure container is visible
+  container.style.display = 'flex';
+  container.style.visibility = 'visible';
+  container.style.opacity = '1';
 
-  // Prepare readable QR code data for graduation verification
-  const studentName = currentProfile?.fullName || approvedRequest.studentName || '';
-  const studentId = currentProfile?.studentId || approvedRequest.studentNumber || '';
-  const clearedDate = formatDate(approvedRequest.updatedAt || new Date());
-  const qrData = `USIU-Africa Clearance Certificate
-Student Name: ${studentName}
-Student ID: ${studentId}
-Status: Cleared for Graduation
-Date: ${clearedDate}`;
-
-  console.log('QR code data:', qrData);
-
-  // Update student ID display
-  if (studentIdEl) {
-    studentIdEl.textContent = studentId || 'N/A';
-  }
-
-  // Wait for QRCode library to be available
-  if (typeof QRCode === 'undefined' && typeof window.QRCode === 'undefined') {
-    console.warn('QRCode library not loaded, retrying in 500ms...');
-    setTimeout(() => generateQRCode(approvedRequest), 500);
-    return;
-  }
-
-  // Generate QR code using qrcode library
-  if (typeof QRCode !== 'undefined') {
-    const canvas = document.createElement('canvas');
-    container.innerHTML = ''; // Clear the loading text
-    container.appendChild(canvas);
-
-    QRCode.toCanvas(canvas, qrData, {
-      width: 200,
-      margin: 2,
-      color: {
-        dark: '#1A237E',
-        light: '#ffffff'
-      },
-      errorCorrectionLevel: 'H'
-    }, (error) => {
-      if (error) {
-        console.error('Error generating QR code:', error);
-        container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed. Please refresh the page.</p>';
-      } else {
-        console.log('QR code generated successfully');
-      }
-    });
-  } else {
-    // Fallback: use qrcodejs if available
-    if (typeof window.QRCode !== 'undefined') {
-      try {
-        container.innerHTML = ''; // Clear the loading text
-        new window.QRCode(container, {
-          text: qrData,
-          width: 200,
-          height: 200,
-          colorDark: '#1A237E',
-          colorLight: '#ffffff'
-        });
-        console.log('QR code generated successfully (using qrcodejs)');
-      } catch (error) {
-        console.error('Error generating QR code:', error);
-        container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed.</p>';
-      }
-    } else {
-      container.innerHTML = '<p style="color: #666; padding: 20px;">QR code library not loaded. Please refresh the page.</p>';
-    }
-  }
-
-  if (studentIdEl) {
-    studentIdEl.textContent = currentProfile?.studentId || 'N/A';
-  }
-}
-
-  // Clear existing QR code
-  container.innerHTML = '<p style="color: #666; padding: 20px;">Generating QR code...</p>';
+  // Show loading state
+  container.innerHTML = '<p style="color: #666; padding: 20px; text-align: center;">Generating QR code...</p>';
 
   // Generate unique QR code data
   const studentId = currentProfile?.studentId || currentProfile?.student_id || approvedRequest.studentNumber || '';
   const studentUid = currentUser?.uid || approvedRequest.studentUid || '';
+  const requestId = approvedRequest.id || '';
+  const clearedDate = approvedRequest.updatedAt || new Date().toISOString();
   
-  const qrData = JSON.stringify({
+  // Create a scannable QR code with a URL or structured text
+  // Format: USIU-CLEARANCE:STUDENT_ID:REQUEST_ID:DATE
+  // This format is easier to scan and verify
+  const qrData = `USIU-CLEARANCE:${studentId}:${requestId}:${clearedDate}`;
+  
+  // Also create a JSON version for detailed verification (stored separately)
+  const qrDataJson = JSON.stringify({
     studentId: studentId,
     studentUid: studentUid,
-    requestId: approvedRequest.id || '',
+    requestId: requestId,
     status: 'approved',
-    clearedDate: approvedRequest.updatedAt || new Date().toISOString(),
-    institution: 'USIU-Africa'
+    clearedDate: clearedDate,
+    institution: 'USIU-Africa',
+    verified: true
   });
 
-  console.log('QR code data:', qrData);
+  console.log('QR code data (text):', qrData);
+  console.log('QR code data (JSON):', qrDataJson);
+  console.log('QRCode library available:', typeof QRCode !== 'undefined', 'window.QRCode:', typeof window.QRCode !== 'undefined');
 
   // Update student ID display
   if (studentIdEl) {
     studentIdEl.textContent = studentId || 'N/A';
   }
 
-  // Wait for QRCode library to be available
-  if (typeof QRCode === 'undefined' && typeof window.QRCode === 'undefined') {
-    console.warn('QRCode library not loaded, retrying in 500ms...');
-    setTimeout(() => generateQRCode(approvedRequest), 500);
-    return;
-  }
-
-  // Generate QR code using qrcode library
-  if (typeof QRCode !== 'undefined') {
-    const canvas = document.createElement('canvas');
-    container.appendChild(canvas);
-    
-    QRCode.toCanvas(canvas, qrData, {
-      width: 200,
-      margin: 2,
-      color: {
-        dark: '#1A237E',
-        light: '#ffffff'
-      },
-      errorCorrectionLevel: 'H'
-    }, (error) => {
-      if (error) {
-        console.error('Error generating QR code:', error);
-        container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed. Please refresh the page.</p>';
-      } else {
-        console.log('QR code generated successfully');
-      }
-    });
-  } else {
-    // Fallback: use qrcodejs if available
-    if (typeof window.QRCode !== 'undefined') {
+  // Function to actually generate the QR code
+  const generateQR = () => {
+    // Generate QR code using qrcode library (preferred method)
+    if (typeof QRCode !== 'undefined') {
+      console.log('Using QRCode library to generate QR code...');
+      
+      // Clear container first
+      container.innerHTML = '';
+      
+      const canvas = document.createElement('canvas');
+      canvas.id = 'qrCodeCanvas';
+      container.appendChild(canvas);
+      
+      // Set canvas style for better visibility
+      canvas.style.display = 'block';
+      canvas.style.margin = '0 auto';
+      canvas.style.maxWidth = '100%';
+      canvas.style.height = 'auto';
+      
+      console.log('Calling QRCode.toCanvas with data:', qrData);
+      
       try {
-        new window.QRCode(container, {
+        QRCode.toCanvas(canvas, qrData, {
+          width: 250,
+          margin: 3,
+          color: {
+            dark: '#1A237E',
+            light: '#ffffff'
+          },
+          errorCorrectionLevel: 'H'
+        }, (error) => {
+          if (error) {
+            console.error('Error generating QR code:', error);
+            container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code generation failed: ' + error.message + '</p>';
+          } else {
+            console.log('QR code generated successfully on canvas');
+            // Store the JSON data as a data attribute for verification
+            canvas.setAttribute('data-qr-json', qrDataJson);
+            canvas.setAttribute('title', 'Scan to verify clearance status');
+            canvas.setAttribute('alt', 'Clearance QR Code');
+            
+            // Ensure canvas is visible
+            canvas.style.visibility = 'visible';
+            canvas.style.opacity = '1';
+          }
+        });
+      } catch (error) {
+        console.error('Exception generating QR code:', error);
+        container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code generation exception: ' + error.message + '</p>';
+      }
+    } else if (typeof window.QRCode !== 'undefined') {
+      // Fallback: use qrcodejs if available
+      console.log('Using window.QRCode (qrcodejs) to generate QR code...');
+      try {
+        container.innerHTML = '';
+        const qr = new window.QRCode(container, {
           text: qrData,
-          width: 200,
-          height: 200,
+          width: 250,
+          height: 250,
           colorDark: '#1A237E',
-          colorLight: '#ffffff'
+          colorLight: '#ffffff',
+          correctLevel: window.QRCode.CorrectLevel.H
         });
         console.log('QR code generated successfully (using qrcodejs)');
       } catch (error) {
-        console.error('Error generating QR code:', error);
-        container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed.</p>';
+        console.error('Error generating QR code with qrcodejs:', error);
+        container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code generation failed: ' + error.message + '</p>';
       }
     } else {
-      container.innerHTML = '<p style="color: #666; padding: 20px;">QR code library not loaded. Please refresh the page.</p>';
+      console.error('No QR code library available');
+      container.innerHTML = '<p style="color: #666; padding: 20px; text-align: center;">QR code library not loaded. Please refresh the page.</p>';
     }
-  }
+  };
 
-  if (studentIdEl) {
-    studentIdEl.textContent = currentProfile?.studentId || 'N/A';
+  // Wait for QRCode library to be available
+  if (typeof QRCode === 'undefined' && typeof window.QRCode === 'undefined') {
+    console.warn('QRCode library not loaded, waiting...');
+    let retries = 0;
+    const maxRetries = 10;
+    const checkLibrary = setInterval(() => {
+      retries++;
+      if (typeof QRCode !== 'undefined' || typeof window.QRCode !== 'undefined') {
+        clearInterval(checkLibrary);
+        console.log('QRCode library loaded after', retries * 100, 'ms');
+        generateQR();
+      } else if (retries >= maxRetries) {
+        clearInterval(checkLibrary);
+        console.error('QRCode library failed to load after', maxRetries * 100, 'ms');
+        container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code library failed to load. Please refresh the page.</p>';
+      }
+    }, 100);
+  } else {
+    // Library is available, generate immediately
+    generateQR();
   }
 }
 
 function printCertificate() {
-  const approvedRequest = studentRequests.find(req => req.overallStatus === 'approved');
+  const approvedRequest = studentRequests.find(req => {
+    const status = req.overallStatus?.toLowerCase();
+    return status === 'approved' || status === 'cleared';
+  });
   if (!approvedRequest) {
     showToast('No approved clearance found.');
     return;
@@ -1316,7 +1336,10 @@ function downloadCertificate() {
   }
 
   const { jsPDF } = window.jspdf;
-  const approvedRequest = studentRequests.find(req => req.overallStatus === 'approved');
+  const approvedRequest = studentRequests.find(req => {
+    const status = req.overallStatus?.toLowerCase();
+    return status === 'approved' || status === 'cleared';
+  });
   
   if (!approvedRequest) {
     showToast('No approved clearance found.');
@@ -2400,5 +2423,4 @@ function resetHoldForm() {
     descriptionInput.value = '';
   }
 }
-
 
