@@ -634,9 +634,11 @@ function renderStudentRequests(requests) {
     window.lucide.createIcons();
   }
   
-  // Update progress chart and certificate visibility
-  updateStudentProgressChart(requests);
-  updateCertificateVisibility(requests);
+  // Update progress chart and certificate visibility (with small delay to ensure DOM is ready)
+  setTimeout(() => {
+    updateStudentProgressChart(requests);
+    updateCertificateVisibility(requests);
+  }, 100);
 }
 
 function renderStudentStatus(label, status, gold = false) {
@@ -706,7 +708,7 @@ function setupNewRequest() {
   });
 }
 
-let studentProgressChart = null;
+let studentCharts = { status: null, department: null };
 
 function setupCertificateFeatures() {
   const printBtn = document.querySelector('#printCertificateBtn');
@@ -722,92 +724,151 @@ function setupCertificateFeatures() {
 }
 
 function updateStudentProgressChart(requests) {
-  if (typeof Chart === 'undefined') return;
-
-  const ctx = document.querySelector('#studentProgressChart');
-  if (!ctx) return;
-
-  // Destroy existing chart if it exists
-  if (studentProgressChart) {
-    studentProgressChart.destroy();
-    studentProgressChart = null;
-  }
-
-  if (!requests || requests.length === 0) {
+  // Wait for Chart.js to be available
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js not loaded, retrying in 500ms...');
+    setTimeout(() => updateStudentProgressChart(requests), 500);
     return;
   }
 
-  // Get the latest request
-  const latestRequest = requests[0];
-  
-  // Calculate progress percentages
-  const departments = [
-    { name: 'Finance', status: latestRequest.feeStatus },
-    { name: 'Library', status: latestRequest.libraryStatus },
-    { name: 'Registrar', status: latestRequest.registrarStatus }
-  ];
+  // Destroy existing charts
+  if (studentCharts.status) {
+    studentCharts.status.destroy();
+    studentCharts.status = null;
+  }
+  if (studentCharts.department) {
+    studentCharts.department.destroy();
+    studentCharts.department = null;
+  }
 
-  const clearedCount = departments.filter(d => d.status === 'cleared').length;
-  const pendingCount = departments.filter(d => d.status === 'pending').length;
-  const notClearedCount = departments.filter(d => d.status === 'not_cleared').length;
-  const totalProgress = (clearedCount / 3) * 100;
+  // Get the latest request or use empty data
+  const latestRequest = requests && requests.length > 0 ? requests[0] : null;
 
-  studentProgressChart = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Cleared', 'Pending', 'Not Cleared'],
-      datasets: [{
-        data: [clearedCount, pendingCount, notClearedCount],
-        backgroundColor: ['#1f9254', palette.gold, '#c0392b'],
-        borderWidth: 0,
-        hoverOffset: 8
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            color: palette.text,
-            usePointStyle: true,
-            padding: 12
+  // Status Chart (Doughnut)
+  const statusCtx = document.querySelector('#studentStatusChart');
+  if (!statusCtx) {
+    console.warn('Status chart canvas not found');
+  } else {
+    console.log('Rendering student status chart with', requests?.length || 0, 'requests');
+    const statusCounts = requests ? requests.reduce(
+      (acc, request) => {
+        acc[request.overallStatus] = (acc[request.overallStatus] || 0) + 1;
+        return acc;
+      },
+      { approved: 0, pending: 0, rejected: 0 }
+    ) : { approved: 0, pending: 0, rejected: 0 };
+
+    studentCharts.status = new Chart(statusCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Approved', 'Pending', 'Rejected'],
+        datasets: [
+          {
+            data: [statusCounts.approved || 0, statusCounts.pending || 0, statusCounts.rejected || 0],
+            backgroundColor: ['#1f9254', palette.gold, '#c0392b'],
+            borderWidth: 0,
+            hoverOffset: 12
           }
-        },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              const label = context.label || '';
-              const value = context.parsed || 0;
-              return `${label}: ${value} department${value !== 1 ? 's' : ''}`;
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: palette.text,
+              usePointStyle: true
             }
           }
-        }
-      },
-      cutout: '70%'
-    },
-    plugins: [{
-      id: 'progressText',
-      beforeDraw: (chart) => {
-        const ctx = chart.ctx;
-        const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
-        const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
-        
-        ctx.save();
-        ctx.font = 'bold 24px Poppins';
-        ctx.fillStyle = palette.blue;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${Math.round(totalProgress)}%`, centerX, centerY - 10);
-        
-        ctx.font = '14px Poppins';
-        ctx.fillStyle = palette.text;
-        ctx.fillText('Complete', centerX, centerY + 15);
-        ctx.restore();
+        },
+        cutout: '70%'
       }
-    }]
-  });
+    });
+  }
+
+  // Department Progress Chart (Bar)
+  const departmentCtx = document.querySelector('#studentDepartmentChart');
+  if (!departmentCtx) {
+    console.warn('Department chart canvas not found');
+  } else {
+    console.log('Rendering student department chart');
+    const departmentTotals = {
+      finance: { cleared: 0, pending: 0, not_cleared: 0 },
+      library: { cleared: 0, pending: 0, not_cleared: 0 },
+      registrar: { cleared: 0, pending: 0, not_cleared: 0 }
+    };
+
+    if (latestRequest) {
+      incrementDepartmentStatus(departmentTotals.finance, latestRequest.feeStatus);
+      incrementDepartmentStatus(departmentTotals.library, latestRequest.libraryStatus);
+      incrementDepartmentStatus(departmentTotals.registrar, latestRequest.registrarStatus);
+    }
+
+    studentCharts.department = new Chart(departmentCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Finance', 'Library', 'Registrar'],
+        datasets: [
+          {
+            label: 'Cleared',
+            data: [
+              departmentTotals.finance.cleared,
+              departmentTotals.library.cleared,
+              departmentTotals.registrar.cleared
+            ],
+            backgroundColor: 'rgba(31, 146, 84, 0.88)',
+            borderRadius: 10,
+            maxBarThickness: 36
+          },
+          {
+            label: 'Pending',
+            data: [
+              departmentTotals.finance.pending,
+              departmentTotals.library.pending,
+              departmentTotals.registrar.pending
+            ],
+            backgroundColor: 'rgba(253, 185, 19, 0.78)',
+            borderRadius: 10,
+            maxBarThickness: 36
+          },
+          {
+            label: 'Not Cleared',
+            data: [
+              departmentTotals.finance.not_cleared,
+              departmentTotals.library.not_cleared,
+              departmentTotals.registrar.not_cleared
+            ],
+            backgroundColor: 'rgba(192, 57, 43, 0.82)',
+            borderRadius: 10,
+            maxBarThickness: 36
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: palette.text, usePointStyle: true }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: palette.text },
+            grid: { display: false }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: palette.text, precision: 0, stepSize: 1 },
+            grid: { color: 'rgba(26, 35, 126, 0.08)' }
+          }
+        }
+      }
+    });
+  }
 }
 
 function updateCertificateVisibility(requests) {
@@ -848,7 +909,10 @@ function generateQRCode(approvedRequest) {
   const container = document.querySelector('#qrCodeContainer');
   const studentIdEl = document.querySelector('#qrStudentId');
   
-  if (!container) return;
+  if (!container) {
+    console.warn('QR code container not found');
+    return;
+  }
 
   // Clear existing QR code
   container.innerHTML = '';
@@ -862,6 +926,13 @@ function generateQRCode(approvedRequest) {
     clearedDate: new Date().toISOString(),
     institution: 'USIU-Africa'
   });
+
+  // Wait for QRCode library to be available
+  if (typeof QRCode === 'undefined' && typeof window.QRCode === 'undefined') {
+    console.warn('QRCode library not loaded, retrying in 500ms...');
+    setTimeout(() => generateQRCode(approvedRequest), 500);
+    return;
+  }
 
   // Generate QR code using qrcode library
   if (typeof QRCode !== 'undefined') {
