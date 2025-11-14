@@ -519,6 +519,18 @@ function subscribeToStudentRequests() {
         studentRequests = snapshot.docs.map(mapRequest);
         console.log('Mapped requests:', studentRequests.length);
         
+        // Debug: Log each request's status
+        studentRequests.forEach((req, idx) => {
+          console.log(`Request ${idx + 1}:`, {
+            id: req.id,
+            overallStatus: req.overallStatus,
+            feeStatus: req.feeStatus,
+            libraryStatus: req.libraryStatus,
+            registrarStatus: req.registrarStatus,
+            hasHolds: req.holds?.length > 0
+          });
+        });
+        
         // Sort by date descending (newest first)
         studentRequests.sort((a, b) => {
           const dateA = new Date(a.requestDate);
@@ -635,9 +647,10 @@ function renderStudentRequests(requests) {
   }
   
   // Update progress chart and certificate visibility (with small delay to ensure DOM is ready)
+  // Always call updateStudentProgressChart, even with empty requests
   setTimeout(() => {
-    updateStudentProgressChart(requests);
-    updateCertificateVisibility(requests);
+    updateStudentProgressChart(requests || []);
+    updateCertificateVisibility(requests || []);
   }, 100);
 }
 
@@ -724,6 +737,8 @@ function setupCertificateFeatures() {
 }
 
 function updateStudentProgressChart(requests) {
+  console.log('updateStudentProgressChart called with', requests?.length || 0, 'requests');
+  
   // Wait for Chart.js to be available
   if (typeof Chart === 'undefined') {
     console.warn('Chart.js not loaded, retrying in 500ms...');
@@ -743,6 +758,11 @@ function updateStudentProgressChart(requests) {
 
   // Get the latest request or use empty data
   const latestRequest = requests && requests.length > 0 ? requests[0] : null;
+  
+  // Ensure requests is an array
+  if (!Array.isArray(requests)) {
+    requests = [];
+  }
 
   // Status Chart (Doughnut)
   const statusCtx = document.querySelector('#studentStatusChart');
@@ -750,42 +770,76 @@ function updateStudentProgressChart(requests) {
     console.warn('Status chart canvas not found');
   } else {
     console.log('Rendering student status chart with', requests?.length || 0, 'requests');
+    
+    // Normalize statuses: treat "cleared" as "approved"
     const statusCounts = requests ? requests.reduce(
       (acc, request) => {
-        acc[request.overallStatus] = (acc[request.overallStatus] || 0) + 1;
+        let status = request.overallStatus;
+        // Normalize cleared to approved
+        if (status === 'cleared') status = 'approved';
+        acc[status] = (acc[status] || 0) + 1;
         return acc;
       },
       { approved: 0, pending: 0, rejected: 0 }
     ) : { approved: 0, pending: 0, rejected: 0 };
 
-    studentCharts.status = new Chart(statusCtx, {
-      type: 'doughnut',
-      data: {
-        labels: ['Approved', 'Pending', 'Rejected'],
-        datasets: [
-          {
-            data: [statusCounts.approved || 0, statusCounts.pending || 0, statusCounts.rejected || 0],
-            backgroundColor: ['#1f9254', palette.gold, '#c0392b'],
-            borderWidth: 0,
-            hoverOffset: 12
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              color: palette.text,
-              usePointStyle: true
+    console.log('Status counts:', statusCounts);
+
+    // Calculate chart data - always show chart even with zeros
+    const approvedCount = (statusCounts.approved || 0) + (statusCounts.cleared || 0);
+    const pendingCount = statusCounts.pending || 0;
+    const rejectedCount = (statusCounts.rejected || 0) + (statusCounts.not_cleared || 0);
+    const chartData = [approvedCount, pendingCount, rejectedCount];
+    
+    console.log('Chart data:', { approvedCount, pendingCount, rejectedCount, chartData });
+    
+    // Always render chart, even with zeros
+    try {
+      studentCharts.status = new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Approved', 'Pending', 'Rejected'],
+          datasets: [
+            {
+              data: chartData,
+              backgroundColor: ['#1f9254', palette.gold, '#c0392b'],
+              borderWidth: 0,
+              hoverOffset: 12
             }
-          }
+          ]
         },
-        cutout: '70%'
-      }
-    });
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: palette.text,
+                usePointStyle: true,
+                padding: 12
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const label = context.label || '';
+                  const value = context.parsed || 0;
+                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                  const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                  return `${label}: ${value} (${percentage}%)`;
+                }
+              }
+            }
+          },
+          cutout: '70%'
+        }
+      });
+      
+      console.log('Status chart rendered successfully');
+    } catch (error) {
+      console.error('Error rendering status chart:', error);
+    }
   }
 
   // Department Progress Chart (Bar)
@@ -872,27 +926,52 @@ function updateStudentProgressChart(requests) {
 }
 
 function updateCertificateVisibility(requests) {
+  console.log('updateCertificateVisibility called with', requests?.length || 0, 'requests');
+  
   if (!requests || requests.length === 0) {
+    console.log('No requests, hiding certificate sections');
     hideCertificateSections();
     return;
   }
 
-  // Check if any request is approved
-  const hasApprovedRequest = requests.some(req => req.overallStatus === 'approved');
+  // Check if any request is approved or cleared
+  // Treat both "approved" and "cleared" as the same status
+  const hasApprovedRequest = requests.some(req => {
+    const status = req.overallStatus?.toLowerCase();
+    const isApproved = status === 'approved' || status === 'cleared';
+    console.log(`Request ${req.id}: overallStatus = ${req.overallStatus}, isApproved = ${isApproved}`);
+    return isApproved;
+  });
+  
+  console.log('Has approved/cleared request:', hasApprovedRequest);
   
   const certificateSection = document.querySelector('#certificateSection');
   const alumniPrompt = document.querySelector('#alumniPrompt');
 
   if (hasApprovedRequest) {
     // Show certificate section and alumni prompt
+    // Find first approved or cleared request
+    const approvedRequest = requests.find(req => {
+      const status = req.overallStatus?.toLowerCase();
+      return status === 'approved' || status === 'cleared';
+    });
+    console.log('Showing certificate section for approved/cleared request:', approvedRequest?.id, 'with status:', approvedRequest?.overallStatus);
+    
     if (certificateSection) {
       certificateSection.classList.remove('hidden');
-      generateQRCode(requests.find(req => req.overallStatus === 'approved'));
+      // Generate QR code with a small delay to ensure DOM is ready
+      setTimeout(() => {
+        generateQRCode(approvedRequest);
+      }, 200);
+    } else {
+      console.warn('Certificate section element not found');
     }
+    
     if (alumniPrompt) {
       alumniPrompt.classList.remove('hidden');
     }
   } else {
+    console.log('No approved requests, hiding certificate sections');
     hideCertificateSections();
   }
 }
@@ -906,6 +985,8 @@ function hideCertificateSections() {
 }
 
 function generateQRCode(approvedRequest) {
+  console.log('generateQRCode called with request:', approvedRequest?.id);
+  
   const container = document.querySelector('#qrCodeContainer');
   const studentIdEl = document.querySelector('#qrStudentId');
   
@@ -914,18 +995,34 @@ function generateQRCode(approvedRequest) {
     return;
   }
 
+  if (!approvedRequest) {
+    console.warn('No approved request provided for QR code generation');
+    container.innerHTML = '<p style="color: #666; padding: 20px;">No approved request found.</p>';
+    return;
+  }
+
   // Clear existing QR code
-  container.innerHTML = '';
+  container.innerHTML = '<p style="color: #666; padding: 20px;">Generating QR code...</p>';
 
   // Generate unique QR code data
+  const studentId = currentProfile?.studentId || currentProfile?.student_id || approvedRequest.studentNumber || '';
+  const studentUid = currentUser?.uid || approvedRequest.studentUid || '';
+  
   const qrData = JSON.stringify({
-    studentId: currentProfile?.studentId || '',
-    studentUid: currentUser?.uid || '',
-    requestId: approvedRequest?.id || '',
+    studentId: studentId,
+    studentUid: studentUid,
+    requestId: approvedRequest.id || '',
     status: 'approved',
-    clearedDate: new Date().toISOString(),
+    clearedDate: approvedRequest.updatedAt || new Date().toISOString(),
     institution: 'USIU-Africa'
   });
+
+  console.log('QR code data:', qrData);
+
+  // Update student ID display
+  if (studentIdEl) {
+    studentIdEl.textContent = studentId || 'N/A';
+  }
 
   // Wait for QRCode library to be available
   if (typeof QRCode === 'undefined' && typeof window.QRCode === 'undefined') {
@@ -951,6 +1048,8 @@ function generateQRCode(approvedRequest) {
       if (error) {
         console.error('Error generating QR code:', error);
         container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed. Please refresh the page.</p>';
+      } else {
+        console.log('QR code generated successfully');
       }
     });
   } else {
@@ -964,6 +1063,7 @@ function generateQRCode(approvedRequest) {
           colorDark: '#1A237E',
           colorLight: '#ffffff'
         });
+        console.log('QR code generated successfully (using qrcodejs)');
       } catch (error) {
         console.error('Error generating QR code:', error);
         container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed.</p>';
@@ -1752,7 +1852,31 @@ function mapRequest(docSnapshot) {
   const feeStatus = normaliseDepartmentStatus(data.feeStatus);
   const libraryStatus = normaliseDepartmentStatus(data.libraryStatus);
   const registrarStatus = normaliseDepartmentStatus(data.registrarStatus);
-  const overallStatus = data.overallStatus || computeOverallStatus(feeStatus, libraryStatus, registrarStatus);
+  
+  // Always recalculate overallStatus to ensure accuracy
+  // Only use stored overallStatus if it's explicitly set by admin
+  let overallStatus = computeOverallStatus(feeStatus, libraryStatus, registrarStatus);
+  
+  // If there are unresolved holds, the status should be 'rejected' or 'pending'
+  const holds = Array.isArray(data.holds) ? data.holds.map(normaliseHold) : [];
+  const hasUnresolvedHolds = holds.some(h => !h.resolved);
+  
+  if (hasUnresolvedHolds && (overallStatus === 'approved' || overallStatus === 'cleared')) {
+    // If there are unresolved holds, cannot be approved
+    overallStatus = 'rejected';
+  }
+  
+  // Allow admin-set overallStatus to override
+  // Normalize "cleared" to "approved" for consistency
+  if (data.overallStatus) {
+    const storedStatus = normaliseOverallStatus(data.overallStatus);
+    // If admin explicitly set it, use that (but normalize cleared to approved)
+    if (storedStatus === 'cleared') {
+      overallStatus = 'approved';
+    } else if (storedStatus !== 'pending') {
+      overallStatus = storedStatus;
+    }
+  }
 
   return {
     id: docSnapshot.id,
@@ -1768,13 +1892,24 @@ function mapRequest(docSnapshot) {
     registrarStatus,
     comments: data.comments || '',
     departmentNotes: data.departmentNotes || {},
-    holds: Array.isArray(data.holds) ? data.holds.map(normaliseHold) : []
+    holds
   };
 }
 
 function normaliseDepartmentStatus(status) {
-  if (status === 'cleared' || status === 'approved') return 'cleared';
-  if (status === 'not_cleared' || status === 'rejected') return 'not_cleared';
+  if (!status || typeof status !== 'string') return 'pending';
+  const normalized = status.toLowerCase().trim();
+  if (normalized === 'cleared' || normalized === 'approved') return 'cleared';
+  if (normalized === 'not_cleared' || normalized === 'rejected' || normalized === 'not cleared') return 'not_cleared';
+  return 'pending';
+}
+
+function normaliseOverallStatus(status) {
+  if (!status || typeof status !== 'string') return 'pending';
+  const normalized = status.toLowerCase().trim();
+  // Treat both "approved" and "cleared" as "approved" for consistency
+  if (normalized === 'approved' || normalized === 'cleared') return 'approved';
+  if (normalized === 'rejected' || normalized === 'not_cleared' || normalized === 'not cleared') return 'rejected';
   return 'pending';
 }
 
@@ -1831,9 +1966,34 @@ function escapeHtml(value) {
 }
 
 function computeOverallStatus(feeStatus, libraryStatus, registrarStatus) {
-  const statuses = [feeStatus, libraryStatus, registrarStatus].map(normaliseDepartmentStatus);
-  if (statuses.every((status) => status === 'cleared')) return 'approved';
-  if (statuses.some((status) => status === 'not_cleared')) return 'rejected';
+  // Normalize all statuses first
+  const normalizedFee = normaliseDepartmentStatus(feeStatus);
+  const normalizedLibrary = normaliseDepartmentStatus(libraryStatus);
+  const normalizedRegistrar = normaliseDepartmentStatus(registrarStatus);
+  
+  const statuses = [normalizedFee, normalizedLibrary, normalizedRegistrar];
+  
+  console.log('Computing overall status:', {
+    feeStatus: feeStatus,
+    libraryStatus: libraryStatus,
+    registrarStatus: registrarStatus,
+    normalized: statuses
+  });
+  
+  // All departments must be cleared for approval
+  if (statuses.every((status) => status === 'cleared')) {
+    console.log('All departments cleared - status: approved');
+    return 'approved'; // Return 'approved' (not 'cleared') for consistency
+  }
+  
+  // If any department is not cleared, it's rejected
+  if (statuses.some((status) => status === 'not_cleared')) {
+    console.log('Some departments not cleared - status: rejected');
+    return 'rejected';
+  }
+  
+  // Otherwise, it's pending
+  console.log('Some departments pending - status: pending');
   return 'pending';
 }
 
