@@ -1083,15 +1083,32 @@ function generateQRCode(approvedRequest) {
   // Function to actually generate the QR code
   const generateQR = () => {
     // Check for QRCode library in multiple ways
-    // The qrcode library from jsdelivr exports QRCode as a global
-    const QRCodeLib = typeof QRCode !== 'undefined' ? QRCode : 
-                      (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined' ? window.QRCode : null);
+    // Try to find QRCode from various possible locations
+    let QRCodeLib = null;
+    
+    // Method 1: Direct global QRCode
+    if (typeof QRCode !== 'undefined') {
+      QRCodeLib = QRCode;
+    }
+    // Method 2: window.QRCode
+    else if (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined') {
+      QRCodeLib = window.QRCode;
+    }
+    // Method 3: Try to access from module exports (if using ES6 modules)
+    else if (typeof module !== 'undefined' && module.exports) {
+      try {
+        QRCodeLib = require('qrcode');
+      } catch (e) {
+        // Not available
+      }
+    }
     
     console.log('QRCodeLib check:', {
       'typeof QRCode': typeof QRCode,
       'QRCode.toCanvas': typeof QRCode !== 'undefined' && typeof QRCode.toCanvas,
       'window.QRCode': typeof window !== 'undefined' && typeof window.QRCode,
-      'QRCodeLib': QRCodeLib ? 'found' : 'not found'
+      'QRCodeLib': QRCodeLib ? 'found' : 'not found',
+      'QRCodeLib type': QRCodeLib ? typeof QRCodeLib : 'null'
     });
     
     // Generate QR code using qrcode library (preferred method)
@@ -1142,41 +1159,63 @@ function generateQRCode(approvedRequest) {
         console.error('Exception generating QR code:', error);
         container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code generation exception: ' + error.message + '</p>';
       }
-    } else if (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined' && typeof window.QRCode === 'function') {
-      // Fallback: use qrcodejs if available
+    } else if (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined') {
+      // Fallback: use qrcodejs if available (different API)
       console.log('Using window.QRCode (qrcodejs) to generate QR code...');
       try {
         container.innerHTML = '';
-        const qr = new window.QRCode(container, {
-          text: qrData,
-          width: 250,
-          height: 250,
-          colorDark: '#1A237E',
-          colorLight: '#ffffff',
-          correctLevel: window.QRCode.CorrectLevel.H
-        });
-        console.log('QR code generated successfully (using qrcodejs)');
+        // qrcodejs uses a different constructor
+        if (typeof window.QRCode === 'function') {
+          const qr = new window.QRCode(container, {
+            text: qrData,
+            width: 250,
+            height: 250,
+            colorDark: '#1A237E',
+            colorLight: '#ffffff',
+            correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.H : 2
+          });
+          console.log('QR code generated successfully (using qrcodejs)');
+        } else {
+          throw new Error('QRCode is not a constructor function');
+        }
       } catch (error) {
         console.error('Error generating QR code with qrcodejs:', error);
-        container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code generation failed: ' + error.message + '</p>';
+        // Try canvas-based generation as last resort
+        tryGenerateQRWithCanvas(qrData, container);
       }
     } else {
-      console.error('No QR code library available');
-      container.innerHTML = '<p style="color: #666; padding: 20px; text-align: center;">QR code library not loaded. Please refresh the page.</p>';
+      console.error('No QR code library available, trying canvas fallback...');
+      // Last resort: try to generate with canvas manually or show helpful message
+      tryGenerateQRWithCanvas(qrData, container);
+    }
+    
+    // Fallback function to generate QR code using canvas (basic implementation)
+    function tryGenerateQRWithCanvas(data, containerEl) {
+      containerEl.innerHTML = '<p style="color: #666; padding: 20px; text-align: center;">QR code library failed to load. <br><a href="javascript:location.reload()" style="color: var(--usiu-blue); text-decoration: underline;">Click to refresh</a> or check your internet connection.</p>';
     }
   };
 
   // Wait for QRCode library to be available
   const checkQRCodeLib = () => {
-    return (typeof QRCode !== 'undefined' && typeof QRCode.toCanvas === 'function') ||
-           (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined' && 
-            (typeof window.QRCode.toCanvas === 'function' || typeof window.QRCode === 'function'));
+    // Check multiple ways the library might be available
+    if (typeof QRCode !== 'undefined' && typeof QRCode.toCanvas === 'function') {
+      return true;
+    }
+    if (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined') {
+      if (typeof window.QRCode.toCanvas === 'function') {
+        return true;
+      }
+      if (typeof window.QRCode === 'function') {
+        return true; // qrcodejs style
+      }
+    }
+    return false;
   };
   
   if (!checkQRCodeLib()) {
     console.warn('QRCode library not loaded, waiting...');
     let retries = 0;
-    const maxRetries = 20; // Increased retries
+    const maxRetries = 30; // Increased retries to 3 seconds
     const checkLibrary = setInterval(() => {
       retries++;
       if (checkQRCodeLib()) {
@@ -1186,7 +1225,23 @@ function generateQRCode(approvedRequest) {
       } else if (retries >= maxRetries) {
         clearInterval(checkLibrary);
         console.error('QRCode library failed to load after', maxRetries * 100, 'ms');
-        container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code library failed to load. Please refresh the page or check your internet connection.</p>';
+        container.innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <p style="color: red; margin-bottom: 12px;">QR code library failed to load.</p>
+            <p style="color: #666; font-size: 0.9rem; margin-bottom: 16px;">
+              This might be due to network issues or CDN blocking. Please try:
+            </p>
+            <ul style="text-align: left; display: inline-block; color: #666; font-size: 0.9rem; margin-bottom: 16px;">
+              <li>Refreshing the page</li>
+              <li>Checking your internet connection</li>
+              <li>Disabling browser extensions that block scripts</li>
+              <li>Trying a different browser</li>
+            </ul>
+            <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 8px;">
+              Refresh Page
+            </button>
+          </div>
+        `;
       }
     }, 100);
   } else {
