@@ -165,16 +165,18 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script>
-      // Ensure QRCode is available globally - the library exports as QRCode
+      // Ensure QRCode is available globally
+      // The qrcode library from jsdelivr exports QRCode as a global variable
       (function() {
-        // The qrcode library from jsdelivr exports QRCode globally
-        if (typeof QRCode === 'undefined' && typeof window !== 'undefined') {
-          // Try to access it from window if available
-          if (typeof window.QRCode !== 'undefined') {
-            window.QRCode = window.QRCode;
+        // Check after a short delay to allow the library to load
+        setTimeout(function() {
+          const isAvailable = typeof QRCode !== 'undefined' || 
+                             (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined');
+          console.log('QRCode library check:', isAvailable ? 'Available' : 'Not available');
+          if (!isAvailable) {
+            console.warn('QRCode library may not have loaded. Check the Network tab in DevTools.');
           }
-        }
-        console.log('QRCode library check:', typeof QRCode !== 'undefined' ? 'Available' : 'Not available');
+        }, 200);
       })();
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
