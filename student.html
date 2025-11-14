@@ -163,9 +163,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
-    <!-- Use qrcodejs library - more reliable for browser use -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="loadQRCodeFallback1()"></script>
     <script>
+      // Define fallback functions BEFORE loading QRCode library
       // Fallback loaders for QRCode library
       let qrcodeLoaded = false;
       let fallbackAttempts = 0;
@@ -182,14 +181,6 @@
         }
         return false;
       }
-      
-      // Wait a bit then check
-      setTimeout(function() {
-        if (!checkQRCodeLoaded() && fallbackAttempts === 0) {
-          console.log('Primary QRCode library not loaded, trying fallbacks...');
-          loadQRCodeFallback1();
-        }
-      }, 500);
       
       function loadQRCodeFallback1() {
         if (qrcodeLoaded || fallbackAttempts >= maxFallbackAttempts) return;
@@ -251,6 +242,17 @@
         };
         document.head.appendChild(script);
       }
+    </script>
+    <!-- Use qrcodejs library - more reliable for browser use -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="loadQRCodeFallback1()"></script>
+    <script>
+      // Wait a bit then check if library loaded
+      setTimeout(function() {
+        if (!checkQRCodeLoaded() && fallbackAttempts === 0) {
+          console.log('Primary QRCode library not loaded, trying fallbacks...');
+          loadQRCodeFallback1();
+        }
+      }, 500);
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/lucide@0.263.1"></script>
