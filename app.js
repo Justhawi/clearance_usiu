@@ -177,6 +177,49 @@ async function initialiseHomePage() {
   setupHomeButtons();
 }
 
+// Default departments to show if Firebase fails or collection is empty
+const defaultDepartments = [
+  {
+    name: 'Finance Department',
+    description: 'Handles tuition fees, payment plans, and financial clearances. Ensure all outstanding fees are settled before graduation.',
+    contact: 'finance@usiu.ac.ke'
+  },
+  {
+    name: 'Library Department',
+    description: 'Manages library book returns, fines, and resource clearances. Return all borrowed materials and clear any outstanding fines.',
+    contact: 'library@usiu.ac.ke'
+  },
+  {
+    name: "Registrar's Office",
+    description: 'Handles academic records, transcripts, and graduation clearances. Verifies completion of all academic requirements.',
+    contact: 'registrar@usiu.ac.ke'
+  }
+];
+
+function renderDepartments(departments, container) {
+  container.innerHTML = '';
+
+  departments.forEach((dept, index) => {
+    const card = document.createElement('article');
+    card.className = 'department-card animate-delay';
+    card.style.animationDelay = `${index * 120}ms`;
+    card.style.animation = 'fadeIn 0.6s ease forwards';
+    card.innerHTML = `
+      <h3 class="department-title">${dept.name || 'Department'}</h3>
+      <p class="department-text">${dept.description || 'Description coming soon.'}</p>
+      <span class="department-contact">
+        <i data-lucide="mail"></i>
+        <span>${dept.contact || dept.contact_email || 'contact@usiu.ac.ke'}</span>
+      </span>
+    `;
+    container.appendChild(card);
+  });
+
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+}
+
 async function populateDepartments() {
   const container = document.querySelector('#departmentList');
   if (!container) return;
@@ -185,41 +228,35 @@ async function populateDepartments() {
     '<p class="section-text" style="text-align:center;">Loading departments...</p>';
 
   try {
+    // Try to load from Firebase if user is authenticated
     const departmentsQuery = query(collection(db, 'departments'), orderBy('name'));
     const snapshot = await getDocs(departmentsQuery);
 
     if (snapshot.empty) {
-      container.innerHTML =
-        '<p class="section-text" style="text-align:center;">No departments have been added yet.</p>';
+      // If Firebase collection is empty, use default departments
+      console.log('No departments in Firebase, using default departments');
+      renderDepartments(defaultDepartments, container);
       return;
     }
 
-    container.innerHTML = '';
-
-    snapshot.docs.forEach((docRef, index) => {
+    // Convert Firebase documents to array
+    const departments = [];
+    snapshot.docs.forEach((docRef) => {
       const data = docRef.data();
-      const card = document.createElement('article');
-      card.className = 'department-card animate-delay';
-      card.style.animationDelay = `${index * 120}ms`;
-      card.style.animation = 'fadeIn 0.6s ease forwards';
-      card.innerHTML = `
-        <h3 class="department-title">${data.name || 'Department'}</h3>
-        <p class="department-text">${data.description || 'Description coming soon.'}</p>
-        <span class="department-contact">
-          <i data-lucide="mail"></i>
-          <span>${data.contact || 'contact@usiu.ac.ke'}</span>
-        </span>
-      `;
-      container.appendChild(card);
+      departments.push({
+        name: data.name || 'Department',
+        description: data.description || 'Description coming soon.',
+        contact: data.contact || data.contact_email || 'contact@usiu.ac.ke'
+      });
     });
 
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
+    // Render departments from Firebase
+    renderDepartments(departments, container);
   } catch (error) {
-    console.error('Failed to load departments:', error);
-    container.innerHTML =
-      '<p class="section-text" style="text-align:center;">Unable to load departments right now. Please try again later.</p>';
+    console.error('Failed to load departments from Firebase:', error);
+    console.log('Using default departments as fallback');
+    // If Firebase fails (permission denied, network error, etc.), use default departments
+    renderDepartments(defaultDepartments, container);
   }
 }
 
