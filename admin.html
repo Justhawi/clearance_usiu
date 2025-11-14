@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard | USIU-Africa Clearance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="admin">
+    <nav class="navbar">
+      <div class="container nav-inner">
+        <a class="brand" href="index.html">
+          <span class="brand-logo"><i data-lucide="shield"></i></span>
+          <span class="brand-text">
+            <h1>Admin Dashboard</h1>
+            <p>USIU-Africa Clearance</p>
+          </span>
+        </a>
+        <div class="nav-links">
+          <a class="btn btn-secondary" href="index.html">Home</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="admin-layout">
+      <div class="container">
+        <header class="page-header">
+          <div>
+            <h2>Welcome back,</h2>
+            <p id="adminName">Admin</p>
+            <div class="chips">
+              <span class="chip">
+                <i data-lucide="shield-check"></i>
+                Clearance Manager
+              </span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="button" id="adminSignOut">
+              <i data-lucide="log-out"></i>
+              Sign Out
+            </button>
+          </div>
+        </header>
+
+        <section class="stats-grid">
+          <article class="stat-card">
+            <span class="label">Total Requests</span>
+            <span class="value" id="statTotal">0</span>
+          </article>
+          <article class="stat-card pending">
+            <span class="label">Pending</span>
+            <span class="value" id="statPending">0</span>
+          </article>
+          <article class="stat-card approved">
+            <span class="label">Approved</span>
+            <span class="value" id="statApproved">0</span>
+          </article>
+          <article class="stat-card rejected">
+            <span class="label">Rejected</span>
+            <span class="value" id="statRejected">0</span>
+          </article>
+        </section>
+
+        <section class="chart-grid">
+          <article class="chart-card">
+            <h4>Status Distribution</h4>
+            <canvas id="statusChart" aria-label="Status distribution doughnut chart"></canvas>
+          </article>
+          <article class="chart-card">
+            <h4>Monthly Trends</h4>
+            <div style="height: 260px;">
+              <canvas id="trendChart" aria-label="Monthly trend line chart"></canvas>
+            </div>
+          </article>
+          <article class="chart-card">
+            <h4>Department Breakdown</h4>
+            <div style="height: 260px;">
+              <canvas id="departmentChart" aria-label="Department clearance bar chart"></canvas>
+            </div>
+          </article>
+        </section>
+
+        <section class="card" style="animation: slideUp 0.6s ease forwards;">
+          <header class="request-header">
+            <h3>Clearance Requests</h3>
+            <span class="badge gold">
+              <i data-lucide="database"></i>
+              Live data overview
+            </span>
+          </header>
+
+          <div class="search-bar">
+            <input
+              id="adminSearch"
+              type="search"
+              placeholder="Search by student name, ID, or email..."
+              aria-label="Search requests"
+            />
+            <select id="adminStatusFilter" aria-label="Filter by status">
+              <option value="all">All Requests</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          <div id="adminEmptyState" class="empty-state hidden">
+            <i data-lucide="users"></i>
+            <h4>No clearance requests found</h4>
+            <p>Adjust your filters or check back later.</p>
+          </div>
+
+          <div id="adminRequestList" class="request-list"></div>
+        </section>
+      </div>
+    </main>
+
+    <div id="adminModal" class="modal-backdrop">
+      <div class="modal large">
+        <button class="modal-close" data-close="admin-modal" aria-label="Close request details">
+          <i data-lucide="x"></i>
+        </button>
+        <h3 id="modalStudentName"></h3>
+        <p>
+          <strong>ID:</strong> <span id="modalStudentId"></span><br />
+          <strong>Email:</strong> <span id="modalStudentEmail"></span><br />
+          <strong>Requested:</strong> <span id="modalRequestDate"></span>
+        </p>
+
+        <form id="adminModalForm">
+          <div class="form-group">
+            <label for="modalFeeStatus">Finance Status</label>
+            <select id="modalFeeStatus" name="feeStatus"></select>
+            <small id="financeNote" class="link"></small>
+          </div>
+          <div class="form-group">
+            <label for="modalLibraryStatus">Library Status</label>
+            <select id="modalLibraryStatus" name="libraryStatus"></select>
+            <small id="libraryNote" class="link"></small>
+          </div>
+          <div class="form-group">
+            <label for="modalRegistrarStatus">Registrar Status</label>
+            <select id="modalRegistrarStatus" name="registrarStatus"></select>
+            <small id="registrarNote" class="link"></small>
+          </div>
+          <div class="form-group">
+            <label for="modalComments">Comments</label>
+            <textarea
+              id="modalComments"
+              name="comments"
+              placeholder="Add a summary or guidance for the student..."
+            ></textarea>
+          </div>
+          <div class="form-group">
+            <label>Active Holds</label>
+            <div id="holdsTable" class="holds-table-container"></div>
+          </div>
+          <div class="form-group">
+            <label>Add Hold</label>
+            <div class="hold-form">
+              <select id="holdDepartment"></select>
+              <input
+                id="holdReason"
+                type="text"
+                placeholder="Hold reason e.g., Account Debt"
+              />
+              <textarea
+                id="holdDescription"
+                placeholder="Additional details for this hold"
+              ></textarea>
+              <button type="button" class="btn btn-secondary" id="addHoldButton">
+                <i data-lucide="plus-circle"></i>
+                Add Hold
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Overall Status</label>
+            <span id="modalOverallStatus" class="status-pill neutral">
+              <i data-lucide="clock"></i>
+              <span>Pending</span>
+            </span>
+          </div>
+          <div class="actions">
+            <button class="btn btn-secondary" type="submit">
+              <i data-lucide="save"></i>
+              Save Changes
+            </button>
+            <button class="btn" type="button" data-close="admin-modal">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
+

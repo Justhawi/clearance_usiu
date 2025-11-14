@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Student Dashboard | USIU-Africa Clearance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="student">
+    <nav class="navbar">
+      <div class="container nav-inner">
+        <a class="brand" href="index.html">
+          <span class="brand-logo"><i data-lucide="graduation-cap"></i></span>
+          <span class="brand-text">
+            <h1>USIU-Africa</h1>
+            <p>Online Clearance System</p>
+          </span>
+        </a>
+        <div class="nav-links">
+          <a class="btn btn-secondary" href="index.html">Home</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="student-layout">
+      <div class="container">
+        <header class="page-header">
+          <div>
+            <h2>Student Dashboard</h2>
+            <p id="studentName">Student</p>
+            <div class="chips">
+              <span class="chip" id="studentId">Student ID</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="openNewRequestModal" class="btn btn-secondary">
+              <i data-lucide="plus"></i>
+              New Clearance Request
+            </button>
+            <button class="btn btn-primary" type="button" id="studentSignOut">
+              <i data-lucide="log-out"></i>
+              Sign Out
+            </button>
+          </div>
+        </header>
+
+        <section class="card" style="animation: slideUp 0.6s ease forwards;">
+          <header class="request-header">
+            <h3>My Clearance Requests</h3>
+            <span class="badge gold">
+              <i data-lucide="info"></i>
+              Track real-time updates
+            </span>
+          </header>
+          <div id="studentLoadingState" class="empty-state">
+            <div class="loading-spinner"></div>
+            <p>Loading your requests...</p>
+          </div>
+          <div id="studentEmptyState" class="empty-state hidden">
+            <i data-lucide="file-text"></i>
+            <h4>No clearance requests yet</h4>
+            <p>Click "New Clearance Request" to get started.</p>
+          </div>
+          <div id="studentRequestList" class="request-list hidden"></div>
+        </section>
+      </div>
+    </main>
+
+    <div id="newRequestModal" class="modal-backdrop">
+      <div class="modal">
+        <button class="modal-close" data-close="new-request" aria-label="Close new request modal">
+          <i data-lucide="x"></i>
+        </button>
+        <h3>New Clearance Request</h3>
+        <p>
+          Are you sure you want to submit a new clearance request? Finance, Library, and Registrar
+          departments will review it and share updates here.
+        </p>
+        <div class="actions" style="margin-top: 24px;">
+          <button id="submitNewRequest" class="btn btn-secondary">Submit Request</button>
+          <button class="btn" data-close="new-request">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
+

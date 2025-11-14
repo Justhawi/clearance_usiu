@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>USIU-Africa Online Clearance System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="home">
+    <nav class="navbar">
+      <div class="container nav-inner">
+        <a class="brand" href="#home">
+          <span class="brand-logo">
+            <i data-lucide="graduation-cap"></i>
+          </span>
+          <span class="brand-text">
+            <h1>USIU-Africa</h1>
+            <p>Online Clearance System</p>
+          </span>
+        </a>
+        <div class="nav-links">
+          <a class="nav-link active" data-target="#home" href="index.html">Home</a>
+          <a class="nav-link" data-target="#departments" href="#departments"
+            >Departments</a
+          >
+          <a class="btn btn-secondary" href="#" data-action="open-login">Log In</a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <section id="home" class="hero">
+        <div class="container hero-content">
+          <h2 class="hero-title">Welcome to USIU-Africa</h2>
+          <h3 class="hero-subtitle">Online Clearance System</h3>
+          <p class="hero-text">
+            Streamline your clearance process with our efficient online system.
+            Get cleared by Finance, Library, and Registrar departments all in
+            one place with real-time updates and seamless communication.
+          </p>
+          <a class="btn btn-primary" href="#" data-action="open-login">
+            Get Started
+            <i data-lucide="chevron-right"></i>
+          </a>
+
+          <div class="feature-grid">
+            <article class="feature-card" style="animation: fadeIn 0.6s ease 0.1s forwards;">
+              <span class="feature-icon blue">
+                <i data-lucide="book-open"></i>
+              </span>
+              <h4 class="feature-title">Apply for Clearance</h4>
+              <p class="feature-text">
+                Submit your clearance request online and track its progress in
+                real-time through your personalized student dashboard.
+              </p>
+            </article>
+            <article class="feature-card" style="animation: fadeIn 0.6s ease 0.2s forwards;">
+              <span class="feature-icon gold">
+                <i data-lucide="users"></i>
+              </span>
+              <h4 class="feature-title">Multi-Department Review</h4>
+              <p class="feature-text">
+                Finance, Library, and Registrar departments collaborate to
+                ensure all requirements are met for a smooth graduation journey.
+              </p>
+            </article>
+            <article class="feature-card" style="animation: fadeIn 0.6s ease 0.3s forwards;">
+              <span class="feature-icon blue">
+                <i data-lucide="shield-check"></i>
+              </span>
+              <h4 class="feature-title">Quick Approval</h4>
+              <p class="feature-text">
+                Receive instant notifications once your clearance is approved,
+                with guidance on any actions required along the way.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="departments" class="section alt">
+        <div class="container">
+          <h2 class="section-title">Our Departments</h2>
+          <p class="section-text">
+            Explore the academic departments working together to complete your
+            clearance journey.
+          </p>
+          <div id="departmentList" class="department-grid"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        <p>&copy; 2025 USIU-Africa. All rights reserved.</p>
+        <p>Online Clearance System</p>
+      </div>
+    </footer>
+
+    <div id="loginModal" class="modal-backdrop">
+      <div class="modal">
+        <button class="modal-close" data-close="login-modal" aria-label="Close login modal">
+          <i data-lucide="x"></i>
+        </button>
+        <div class="text-center">
+          <h3 id="loginModalTitle">Welcome Back</h3>
+          <p id="loginModalSubtitle">Sign in to your account</p>
+        </div>
+        <form id="loginForm">
+          <div id="accountFields" class="hidden">
+            <div class="form-group">
+              <label for="fullName">Full Name</label>
+              <input id="fullName" name="fullName" type="text" placeholder="Jane Doe" />
+            </div>
+            <div class="form-group">
+              <label for="accountRole">Account Type</label>
+              <select id="accountRole" name="role">
+                <option value="student">Student</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="form-group " id="studentIdGroup">
+              <label for="studentIdInput">Student ID</label>
+              <input
+                id="studentIdInput"
+                name="studentId"
+                type="text"
+                placeholder="e.g., 675432"
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="loginEmail">Email Address</label>
+            <input
+              id="loginEmail"
+              name="email"
+              type="email"
+              placeholder="you@usiu.ac.ke"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <input id="loginPassword" name="password" type="password" minlength="6" required />
+          </div>
+          <div id="loginFeedback" class="status-pill pending hidden"></div>
+          <button id="loginSubmit" class="btn btn-secondary" type="submit">Sign In</button>
+        </form>
+        <button id="toggleLoginMode" type="button" class="login-toggle">
+          Don't have an account? Sign up
+        </button>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
+
