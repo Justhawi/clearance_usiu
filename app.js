@@ -986,10 +986,10 @@ function hideCertificateSections() {
 
 function generateQRCode(approvedRequest) {
   console.log('generateQRCode called with request:', approvedRequest?.id);
-  
+
   const container = document.querySelector('#qrCodeContainer');
   const studentIdEl = document.querySelector('#qrStudentId');
-  
+
   if (!container) {
     console.warn('QR code container not found');
     return;
@@ -1000,6 +1000,82 @@ function generateQRCode(approvedRequest) {
     container.innerHTML = '<p style="color: #666; padding: 20px;">No approved request found.</p>';
     return;
   }
+
+  // Clear existing QR code
+  container.innerHTML = '<p style="color: #666; padding: 20px;">Generating QR code...</p>';
+
+  // Prepare readable QR code data for graduation verification
+  const studentName = currentProfile?.fullName || approvedRequest.studentName || '';
+  const studentId = currentProfile?.studentId || approvedRequest.studentNumber || '';
+  const clearedDate = formatDate(approvedRequest.updatedAt || new Date());
+  const qrData = `USIU-Africa Clearance Certificate
+Student Name: ${studentName}
+Student ID: ${studentId}
+Status: Cleared for Graduation
+Date: ${clearedDate}`;
+
+  console.log('QR code data:', qrData);
+
+  // Update student ID display
+  if (studentIdEl) {
+    studentIdEl.textContent = studentId || 'N/A';
+  }
+
+  // Wait for QRCode library to be available
+  if (typeof QRCode === 'undefined' && typeof window.QRCode === 'undefined') {
+    console.warn('QRCode library not loaded, retrying in 500ms...');
+    setTimeout(() => generateQRCode(approvedRequest), 500);
+    return;
+  }
+
+  // Generate QR code using qrcode library
+  if (typeof QRCode !== 'undefined') {
+    const canvas = document.createElement('canvas');
+    container.innerHTML = ''; // Clear the loading text
+    container.appendChild(canvas);
+
+    QRCode.toCanvas(canvas, qrData, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#1A237E',
+        light: '#ffffff'
+      },
+      errorCorrectionLevel: 'H'
+    }, (error) => {
+      if (error) {
+        console.error('Error generating QR code:', error);
+        container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed. Please refresh the page.</p>';
+      } else {
+        console.log('QR code generated successfully');
+      }
+    });
+  } else {
+    // Fallback: use qrcodejs if available
+    if (typeof window.QRCode !== 'undefined') {
+      try {
+        container.innerHTML = ''; // Clear the loading text
+        new window.QRCode(container, {
+          text: qrData,
+          width: 200,
+          height: 200,
+          colorDark: '#1A237E',
+          colorLight: '#ffffff'
+        });
+        console.log('QR code generated successfully (using qrcodejs)');
+      } catch (error) {
+        console.error('Error generating QR code:', error);
+        container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed.</p>';
+      }
+    } else {
+      container.innerHTML = '<p style="color: #666; padding: 20px;">QR code library not loaded. Please refresh the page.</p>';
+    }
+  }
+
+  if (studentIdEl) {
+    studentIdEl.textContent = currentProfile?.studentId || 'N/A';
+  }
+}
 
   // Clear existing QR code
   container.innerHTML = '<p style="color: #666; padding: 20px;">Generating QR code...</p>';
@@ -2324,4 +2400,5 @@ function resetHoldForm() {
     descriptionInput.value = '';
   }
 }
+
 
