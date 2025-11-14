@@ -104,6 +104,8 @@ button {
   display: flex;
   align-items: center;
   gap: 28px;
+  position: relative;
+  z-index: 10;
 }
 
 .nav-link {
@@ -143,10 +145,14 @@ button {
   font-size: 1rem;
   transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
   box-shadow: 0 12px 30px rgba(26, 35, 126, 0.18);
-  cursor: pointer;
+  cursor: pointer !important;
   text-decoration: none;
   border: none;
-  pointer-events: auto;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 10;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .btn:hover {
