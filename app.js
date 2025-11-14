@@ -1082,11 +1082,11 @@ function generateQRCode(approvedRequest) {
 
   // Function to actually generate the QR code
   const generateQR = () => {
+    // qrcodejs library uses QRCode as a constructor function
     // Check for QRCode library in multiple ways
-    // Try to find QRCode from various possible locations
     let QRCodeLib = null;
     
-    // Method 1: Direct global QRCode
+    // Method 1: Direct global QRCode (qrcodejs style)
     if (typeof QRCode !== 'undefined') {
       QRCodeLib = QRCode;
     }
@@ -1094,120 +1094,84 @@ function generateQRCode(approvedRequest) {
     else if (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined') {
       QRCodeLib = window.QRCode;
     }
-    // Method 3: Try to access from module exports (if using ES6 modules)
-    else if (typeof module !== 'undefined' && module.exports) {
-      try {
-        QRCodeLib = require('qrcode');
-      } catch (e) {
-        // Not available
-      }
-    }
     
     console.log('QRCodeLib check:', {
       'typeof QRCode': typeof QRCode,
-      'QRCode.toCanvas': typeof QRCode !== 'undefined' && typeof QRCode.toCanvas,
+      'QRCode is function': typeof QRCode === 'function',
       'window.QRCode': typeof window !== 'undefined' && typeof window.QRCode,
+      'window.QRCode is function': typeof window !== 'undefined' && typeof window.QRCode === 'function',
       'QRCodeLib': QRCodeLib ? 'found' : 'not found',
       'QRCodeLib type': QRCodeLib ? typeof QRCodeLib : 'null'
     });
     
-    // Generate QR code using qrcode library (preferred method)
-    if (QRCodeLib && typeof QRCodeLib.toCanvas === 'function') {
-      console.log('Using QRCode.toCanvas to generate QR code...');
+    // Generate QR code using qrcodejs library (constructor style)
+    if (QRCodeLib && typeof QRCodeLib === 'function') {
+      console.log('Using QRCode constructor (qrcodejs) to generate QR code...');
       
       // Clear container first
       container.innerHTML = '';
       
-      const canvas = document.createElement('canvas');
-      canvas.id = 'qrCodeCanvas';
-      container.appendChild(canvas);
-      
-      // Set canvas style for better visibility
-      canvas.style.display = 'block';
-      canvas.style.margin = '0 auto';
-      canvas.style.maxWidth = '100%';
-      canvas.style.height = 'auto';
-      
-      console.log('Calling QRCode.toCanvas with data:', qrData);
+      console.log('Calling new QRCode() with data:', qrData);
       
       try {
-        QRCodeLib.toCanvas(canvas, qrData, {
+        // qrcodejs uses constructor: new QRCode(element, options)
+        const qr = new QRCodeLib(container, {
+          text: qrData,
           width: 250,
-          margin: 3,
-          color: {
-            dark: '#1A237E',
-            light: '#ffffff'
-          },
-          errorCorrectionLevel: 'H'
-        }, (error) => {
-          if (error) {
-            console.error('Error generating QR code:', error);
-            container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code generation failed: ' + error.message + '</p>';
-          } else {
-            console.log('QR code generated successfully on canvas');
-            // Store the JSON data as a data attribute for verification
-            canvas.setAttribute('data-qr-json', qrDataJson);
-            canvas.setAttribute('title', 'Scan to verify clearance status');
-            canvas.setAttribute('alt', 'Clearance QR Code');
-            
-            // Ensure canvas is visible
-            canvas.style.visibility = 'visible';
-            canvas.style.opacity = '1';
-          }
+          height: 250,
+          colorDark: '#1A237E',
+          colorLight: '#ffffff',
+          correctLevel: QRCodeLib.CorrectLevel ? QRCodeLib.CorrectLevel.H : 2
         });
+        
+        console.log('QR code generated successfully');
+        
+        // Store the JSON data as a data attribute on the container
+        container.setAttribute('data-qr-json', qrDataJson);
+        container.setAttribute('title', 'Scan to verify clearance status');
+        
+        // Find the canvas or img element created by qrcodejs and add attributes
+        const qrElement = container.querySelector('canvas') || container.querySelector('img');
+        if (qrElement) {
+          qrElement.setAttribute('alt', 'Clearance QR Code');
+          qrElement.style.display = 'block';
+          qrElement.style.margin = '0 auto';
+        }
       } catch (error) {
         console.error('Exception generating QR code:', error);
         container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code generation exception: ' + error.message + '</p>';
       }
-    } else if (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined') {
-      // Fallback: use qrcodejs if available (different API)
-      console.log('Using window.QRCode (qrcodejs) to generate QR code...');
-      try {
-        container.innerHTML = '';
-        // qrcodejs uses a different constructor
-        if (typeof window.QRCode === 'function') {
-          const qr = new window.QRCode(container, {
-            text: qrData,
-            width: 250,
-            height: 250,
-            colorDark: '#1A237E',
-            colorLight: '#ffffff',
-            correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.H : 2
-          });
-          console.log('QR code generated successfully (using qrcodejs)');
-        } else {
-          throw new Error('QRCode is not a constructor function');
-        }
-      } catch (error) {
-        console.error('Error generating QR code with qrcodejs:', error);
-        // Try canvas-based generation as last resort
-        tryGenerateQRWithCanvas(qrData, container);
-      }
     } else {
-      console.error('No QR code library available, trying canvas fallback...');
-      // Last resort: try to generate with canvas manually or show helpful message
-      tryGenerateQRWithCanvas(qrData, container);
-    }
-    
-    // Fallback function to generate QR code using canvas (basic implementation)
-    function tryGenerateQRWithCanvas(data, containerEl) {
-      containerEl.innerHTML = '<p style="color: #666; padding: 20px; text-align: center;">QR code library failed to load. <br><a href="javascript:location.reload()" style="color: var(--usiu-blue); text-decoration: underline;">Click to refresh</a> or check your internet connection.</p>';
+      console.error('No QR code library available');
+      container.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+          <p style="color: red; margin-bottom: 12px;">QR code library failed to load.</p>
+          <p style="color: #666; font-size: 0.9rem; margin-bottom: 16px;">
+            The QR code library could not be loaded. This might be due to:
+          </p>
+          <ul style="text-align: left; display: inline-block; color: #666; font-size: 0.9rem; margin-bottom: 16px;">
+            <li>Network connectivity issues</li>
+            <li>Firewall or security software blocking CDN requests</li>
+            <li>Corporate network restrictions</li>
+            <li>CDN service outage</li>
+          </ul>
+          <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 8px;">
+            Refresh Page
+          </button>
+        </div>
+      `;
     }
   };
 
   // Wait for QRCode library to be available
+  // qrcodejs exports QRCode as a constructor function
   const checkQRCodeLib = () => {
-    // Check multiple ways the library might be available
-    if (typeof QRCode !== 'undefined' && typeof QRCode.toCanvas === 'function') {
+    // Check if QRCode is available as a constructor function (qrcodejs style)
+    if (typeof QRCode !== 'undefined' && typeof QRCode === 'function') {
       return true;
     }
-    if (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined') {
-      if (typeof window.QRCode.toCanvas === 'function') {
-        return true;
-      }
-      if (typeof window.QRCode === 'function') {
-        return true; // qrcodejs style
-      }
+    if (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined' && typeof window.QRCode === 'function') {
+      return true;
     }
     return false;
   };
