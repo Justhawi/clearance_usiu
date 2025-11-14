@@ -105,6 +105,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (page === 'departments') {
+    // Set up buttons for departments page
+    setupHomeButtons();
+    populateDepartments();
+  }
+
+  if (page === 'contact') {
+    // Set up buttons for contact page
+    setupHomeButtons();
+  }
+
   onAuthStateChanged(auth, async (user) => {
     currentUser = user;
     currentProfile = null;
