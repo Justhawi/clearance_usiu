@@ -29,7 +29,7 @@
           <a class="nav-link" data-target="#departments" href="#departments"
             >Departments</a
           >
-          <a class="btn btn-secondary" href="#" data-action="open-login">Log In</a>
+          <a class="btn btn-secondary" href="#" data-action="open-login" onclick="window.openLoginModal && window.openLoginModal(); return false;">Log In</a>
         </div>
       </div>
     </nav>
@@ -44,7 +44,7 @@
             Get cleared by Finance, Library, and Registrar departments all in
             one place with real-time updates and seamless communication.
           </p>
-          <a class="btn btn-primary" href="#" data-action="open-login">
+          <a class="btn btn-primary" href="#" data-action="open-login" onclick="window.openLoginModal && window.openLoginModal(); return false;">
             Get Started
             <i data-lucide="chevron-right"></i>
           </a>
@@ -159,6 +159,25 @@
     </div>
 
     <script src="https://unpkg.com/lucide@0.263.1"></script>
+    <script>
+      // Make openLoginModal available immediately for inline onclick handlers
+      window.openLoginModal = function() {
+        console.log('=== openLoginModal called (inline) ===');
+        const modal = document.querySelector('#loginModal');
+        if (!modal) {
+          console.error('ERROR: Login modal not found!');
+          return;
+        }
+        modal.classList.add('active');
+        modal.style.display = 'flex';
+        modal.style.zIndex = '1000';
+        modal.style.visibility = 'visible';
+        modal.style.opacity = '1';
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      };
+    </script>
     <script type="module" src="app.js"></script>
   </body>
 </html>
