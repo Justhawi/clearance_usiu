@@ -50,6 +50,77 @@
           </div>
         </header>
 
+        <!-- Progress Chart Section -->
+        <section class="card" style="animation: slideUp 0.6s ease forwards;">
+          <header class="request-header">
+            <h3>Clearance Progress</h3>
+            <span class="badge gold">
+              <i data-lucide="trending-up"></i>
+              Real-time status
+            </span>
+          </header>
+          <div id="progressChartContainer" style="height: 300px; position: relative;">
+            <canvas id="studentProgressChart"></canvas>
+          </div>
+        </section>
+
+        <!-- Alumni Registration Prompt (shown when cleared) -->
+        <div id="alumniPrompt" class="card hidden" style="background: linear-gradient(135deg, var(--usiu-gold), #ffc94d); color: var(--usiu-white); animation: slideUp 0.6s ease 0.2s forwards;">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <div style="flex: 1;">
+              <h3 style="color: var(--usiu-white); margin: 0 0 8px 0;">
+                <i data-lucide="graduation-cap"></i> Congratulations! You're Cleared!
+              </h3>
+              <p style="margin: 0; opacity: 0.95;">
+                Your clearance has been approved. Please proceed to register as an alumni to complete your graduation process.
+              </p>
+            </div>
+            <button id="registerAlumniBtn" class="btn" style="background: var(--usiu-white); color: var(--usiu-blue);">
+              <i data-lucide="user-plus"></i>
+              Register as Alumni
+            </button>
+          </div>
+        </div>
+
+        <!-- Certificate & QR Code Section (shown when cleared) -->
+        <section id="certificateSection" class="card hidden" style="animation: slideUp 0.6s ease 0.1s forwards;">
+          <header class="request-header">
+            <h3>Clearance Certificate</h3>
+            <span class="badge gold">
+              <i data-lucide="award"></i>
+              Official Document
+            </span>
+          </header>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px;">
+            <div>
+              <h4 style="margin-bottom: 12px;">Your QR Code</h4>
+              <p style="font-size: 0.9rem; color: rgba(44, 62, 80, 0.7); margin-bottom: 16px;">
+                Scan this QR code at graduation to verify your clearance status.
+              </p>
+              <div id="qrCodeContainer" style="background: white; padding: 20px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+              <p style="font-size: 0.85rem; color: rgba(44, 62, 80, 0.6); margin-top: 12px;">
+                Student ID: <strong id="qrStudentId"></strong>
+              </p>
+            </div>
+            <div>
+              <h4 style="margin-bottom: 12px;">Certificate Actions</h4>
+              <p style="font-size: 0.9rem; color: rgba(44, 62, 80, 0.7); margin-bottom: 16px;">
+                Download or print your official clearance certificate.
+              </p>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button id="printCertificateBtn" class="btn btn-secondary">
+                  <i data-lucide="printer"></i>
+                  Print Certificate
+                </button>
+                <button id="downloadCertificateBtn" class="btn btn-primary">
+                  <i data-lucide="download"></i>
+                  Download PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="card" style="animation: slideUp 0.6s ease forwards;">
           <header class="request-header">
             <h3>My Clearance Requests</h3>
@@ -89,6 +160,9 @@
       </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/lucide@0.263.1"></script>
     <script type="module" src="app.js"></script>
   </body>
