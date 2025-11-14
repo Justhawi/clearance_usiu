@@ -163,20 +163,80 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- Try multiple CDN sources for QRCode library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" onerror="loadQRCodeFallback1()"></script>
     <script>
-      // Ensure QRCode is available globally
-      // The qrcode library from jsdelivr exports QRCode as a global variable
+      // Fallback loaders for QRCode library
+      let qrcodeLoaded = false;
+      let fallbackAttempts = 0;
+      const maxFallbackAttempts = 3;
+      
+      function loadQRCodeFallback1() {
+        if (qrcodeLoaded || fallbackAttempts >= maxFallbackAttempts) return;
+        fallbackAttempts++;
+        console.log('Primary QRCode CDN (jsdelivr) failed, trying unpkg...');
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js';
+        script.onerror = function() {
+          console.log('Unpkg CDN failed, trying cdnjs...');
+          loadQRCodeFallback2();
+        };
+        script.onload = function() {
+          qrcodeLoaded = true;
+          console.log('QRCode library loaded from unpkg CDN');
+        };
+        document.head.appendChild(script);
+      }
+      
+      function loadQRCodeFallback2() {
+        if (qrcodeLoaded || fallbackAttempts >= maxFallbackAttempts) return;
+        fallbackAttempts++;
+        console.log('Trying cdnjs CDN...');
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js';
+        script.onerror = function() {
+          console.error('All QRCode CDN sources failed. Trying alternative library...');
+          loadAlternativeQRCode();
+        };
+        script.onload = function() {
+          qrcodeLoaded = true;
+          console.log('QRCode library loaded from cdnjs CDN');
+        };
+        document.head.appendChild(script);
+      }
+      
+      // Alternative QR code library using qrcodejs
+      function loadAlternativeQRCode() {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+        script.onload = function() {
+          console.log('Alternative QRCode library loaded');
+          // Map qrcodejs to QRCode for compatibility
+          if (typeof QRCode === 'undefined' && typeof window.QRCode !== 'undefined') {
+            window.QRCode = window.QRCode;
+          }
+        };
+        script.onerror = function() {
+          console.error('All QR code libraries failed to load');
+        };
+        document.head.appendChild(script);
+      }
+      
+      // Check QRCode availability after libraries load
       (function() {
-        // Check after a short delay to allow the library to load
-        setTimeout(function() {
+        function checkQRCode() {
           const isAvailable = typeof QRCode !== 'undefined' || 
                              (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined');
-          console.log('QRCode library check:', isAvailable ? 'Available' : 'Not available');
-          if (!isAvailable) {
-            console.warn('QRCode library may not have loaded. Check the Network tab in DevTools.');
+          if (isAvailable) {
+            console.log('QRCode library is available');
+            qrcodeLoaded = true;
+          } else {
+            console.warn('QRCode library not yet available, will retry...');
+            setTimeout(checkQRCode, 500);
           }
-        }, 200);
+        }
+        // Start checking after a delay
+        setTimeout(checkQRCode, 500);
       })();
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
