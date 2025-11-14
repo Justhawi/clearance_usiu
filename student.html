@@ -77,10 +77,10 @@
                 Your clearance has been approved. Please proceed to register as an alumni to complete your graduation process.
               </p>
             </div>
-            <button id="registerAlumniBtn" class="btn" style="background: var(--usiu-white); color: var(--usiu-blue);">
+            <a id="registerAlumniBtn" href="https://cx.usiu.ac.ke/ICS/Alumni/Home.jnz?portlet=Registration" target="_blank" rel="noopener noreferrer" class="btn" style="background: var(--usiu-white); color: var(--usiu-blue); text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
               <i data-lucide="user-plus"></i>
               Register as Alumni
-            </button>
+            </a>
           </div>
         </div>
 
@@ -99,7 +99,7 @@
               <p style="font-size: 0.9rem; color: rgba(44, 62, 80, 0.7); margin-bottom: 16px;">
                 Scan this QR code at graduation to verify your clearance status.
               </p>
-              <div id="qrCodeContainer" style="background: white; padding: 20px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+              <div id="qrCodeContainer" style="background: white; padding: 20px; border-radius: 12px; display: flex; justify-content: center; align-items: center; min-height: 250px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
               <p style="font-size: 0.85rem; color: rgba(44, 62, 80, 0.6); margin-top: 12px;">
                 Student ID: <strong id="qrStudentId"></strong>
               </p>
@@ -164,6 +164,19 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script>
+      // Ensure QRCode is available globally - the library exports as QRCode
+      (function() {
+        // The qrcode library from jsdelivr exports QRCode globally
+        if (typeof QRCode === 'undefined' && typeof window !== 'undefined') {
+          // Try to access it from window if available
+          if (typeof window.QRCode !== 'undefined') {
+            window.QRCode = window.QRCode;
+          }
+        }
+        console.log('QRCode library check:', typeof QRCode !== 'undefined' ? 'Available' : 'Not available');
+      })();
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/lucide@0.263.1"></script>
     <script type="module" src="app.js"></script>
