@@ -50,18 +50,18 @@
           </div>
         </header>
 
-        <!-- Progress Chart Section -->
-        <section class="card" style="animation: slideUp 0.6s ease forwards;">
-          <header class="request-header">
-            <h3>Clearance Progress</h3>
-            <span class="badge gold">
-              <i data-lucide="trending-up"></i>
-              Real-time status
-            </span>
-          </header>
-          <div id="progressChartContainer" style="height: 300px; position: relative;">
-            <canvas id="studentProgressChart"></canvas>
-          </div>
+        <!-- Progress Charts Section -->
+        <section class="chart-grid" style="animation: slideUp 0.6s ease forwards;">
+          <article class="chart-card">
+            <h4>Overall Status</h4>
+            <canvas id="studentStatusChart" aria-label="Student clearance status doughnut chart"></canvas>
+          </article>
+          <article class="chart-card">
+            <h4>Department Progress</h4>
+            <div style="height: 260px;">
+              <canvas id="studentDepartmentChart" aria-label="Department clearance bar chart"></canvas>
+            </div>
+          </article>
         </section>
 
         <!-- Alumni Registration Prompt (shown when cleared) -->
