@@ -749,15 +749,18 @@ function setupCertificateFeatures() {
   printBtn?.addEventListener('click', printCertificate);
   downloadBtn?.addEventListener('click', downloadCertificate);
   
-  // Set up alumni button/link with multiple approaches to ensure it works
+  // Set up alumni button/link - it's now an anchor tag in HTML, just add click handler
   if (alumniBtn) {
-    // Ensure href is set correctly
     const url = 'https://cx.usiu.ac.ke/ICS/Alumni/Home.jnz?portlet=Registration';
-    alumniBtn.setAttribute('href', url);
-    alumniBtn.setAttribute('target', '_blank');
-    alumniBtn.setAttribute('rel', 'noopener noreferrer');
     
-    // Add click handler for toast notification (href will still work as fallback)
+    // Ensure href is set correctly (in case it wasn't in HTML)
+    if (alumniBtn instanceof HTMLAnchorElement) {
+      alumniBtn.href = url;
+      alumniBtn.target = '_blank';
+      alumniBtn.rel = 'noopener noreferrer';
+    }
+    
+    // Add click handler for toast notification
     alumniBtn.addEventListener('click', (e) => {
       console.log('Opening alumni registration:', url);
       showToast('Opening alumni registration page...');
@@ -1039,6 +1042,9 @@ function generateQRCode(approvedRequest) {
   container.style.display = 'flex';
   container.style.visibility = 'visible';
   container.style.opacity = '1';
+  container.style.justifyContent = 'center';
+  container.style.alignItems = 'center';
+  container.style.minHeight = '250px';
 
   // Show loading state
   container.innerHTML = '<p style="color: #666; padding: 20px; text-align: center;">Generating QR code...</p>';
@@ -1076,9 +1082,21 @@ function generateQRCode(approvedRequest) {
 
   // Function to actually generate the QR code
   const generateQR = () => {
+    // Check for QRCode library in multiple ways
+    // The qrcode library from jsdelivr exports QRCode as a global
+    const QRCodeLib = typeof QRCode !== 'undefined' ? QRCode : 
+                      (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined' ? window.QRCode : null);
+    
+    console.log('QRCodeLib check:', {
+      'typeof QRCode': typeof QRCode,
+      'QRCode.toCanvas': typeof QRCode !== 'undefined' && typeof QRCode.toCanvas,
+      'window.QRCode': typeof window !== 'undefined' && typeof window.QRCode,
+      'QRCodeLib': QRCodeLib ? 'found' : 'not found'
+    });
+    
     // Generate QR code using qrcode library (preferred method)
-    if (typeof QRCode !== 'undefined') {
-      console.log('Using QRCode library to generate QR code...');
+    if (QRCodeLib && typeof QRCodeLib.toCanvas === 'function') {
+      console.log('Using QRCode.toCanvas to generate QR code...');
       
       // Clear container first
       container.innerHTML = '';
@@ -1096,7 +1114,7 @@ function generateQRCode(approvedRequest) {
       console.log('Calling QRCode.toCanvas with data:', qrData);
       
       try {
-        QRCode.toCanvas(canvas, qrData, {
+        QRCodeLib.toCanvas(canvas, qrData, {
           width: 250,
           margin: 3,
           color: {
@@ -1124,7 +1142,7 @@ function generateQRCode(approvedRequest) {
         console.error('Exception generating QR code:', error);
         container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code generation exception: ' + error.message + '</p>';
       }
-    } else if (typeof window.QRCode !== 'undefined') {
+    } else if (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined' && typeof window.QRCode === 'function') {
       // Fallback: use qrcodejs if available
       console.log('Using window.QRCode (qrcodejs) to generate QR code...');
       try {
@@ -1149,24 +1167,31 @@ function generateQRCode(approvedRequest) {
   };
 
   // Wait for QRCode library to be available
-  if (typeof QRCode === 'undefined' && typeof window.QRCode === 'undefined') {
+  const checkQRCodeLib = () => {
+    return (typeof QRCode !== 'undefined' && typeof QRCode.toCanvas === 'function') ||
+           (typeof window !== 'undefined' && typeof window.QRCode !== 'undefined' && 
+            (typeof window.QRCode.toCanvas === 'function' || typeof window.QRCode === 'function'));
+  };
+  
+  if (!checkQRCodeLib()) {
     console.warn('QRCode library not loaded, waiting...');
     let retries = 0;
-    const maxRetries = 10;
+    const maxRetries = 20; // Increased retries
     const checkLibrary = setInterval(() => {
       retries++;
-      if (typeof QRCode !== 'undefined' || typeof window.QRCode !== 'undefined') {
+      if (checkQRCodeLib()) {
         clearInterval(checkLibrary);
         console.log('QRCode library loaded after', retries * 100, 'ms');
         generateQR();
       } else if (retries >= maxRetries) {
         clearInterval(checkLibrary);
         console.error('QRCode library failed to load after', maxRetries * 100, 'ms');
-        container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code library failed to load. Please refresh the page.</p>';
+        container.innerHTML = '<p style="color: red; padding: 20px; text-align: center;">QR code library failed to load. Please refresh the page or check your internet connection.</p>';
       }
     }, 100);
   } else {
     // Library is available, generate immediately
+    console.log('QRCode library is available, generating immediately');
     generateQR();
   }
 }
