@@ -437,6 +437,7 @@ function initialiseStudentDashboard() {
   renderStudentWelcome();
   setupStudentSignOut();
   setupNewRequest();
+  setupCertificateFeatures();
   subscribeToStudentRequests();
 }
 
@@ -632,6 +633,10 @@ function renderStudentRequests(requests) {
   if (window.lucide) {
     window.lucide.createIcons();
   }
+  
+  // Update progress chart and certificate visibility
+  updateStudentProgressChart(requests);
+  updateCertificateVisibility(requests);
 }
 
 function renderStudentStatus(label, status, gold = false) {
@@ -699,6 +704,442 @@ function setupNewRequest() {
       submitButton.textContent = originalText;
     }
   });
+}
+
+let studentProgressChart = null;
+
+function setupCertificateFeatures() {
+  const printBtn = document.querySelector('#printCertificateBtn');
+  const downloadBtn = document.querySelector('#downloadCertificateBtn');
+  const alumniBtn = document.querySelector('#registerAlumniBtn');
+
+  printBtn?.addEventListener('click', printCertificate);
+  downloadBtn?.addEventListener('click', downloadCertificate);
+  alumniBtn?.addEventListener('click', () => {
+    window.open('https://alumni.usiu.ac.ke/register', '_blank');
+    showToast('Opening alumni registration page...');
+  });
+}
+
+function updateStudentProgressChart(requests) {
+  if (typeof Chart === 'undefined') return;
+
+  const ctx = document.querySelector('#studentProgressChart');
+  if (!ctx) return;
+
+  // Destroy existing chart if it exists
+  if (studentProgressChart) {
+    studentProgressChart.destroy();
+    studentProgressChart = null;
+  }
+
+  if (!requests || requests.length === 0) {
+    return;
+  }
+
+  // Get the latest request
+  const latestRequest = requests[0];
+  
+  // Calculate progress percentages
+  const departments = [
+    { name: 'Finance', status: latestRequest.feeStatus },
+    { name: 'Library', status: latestRequest.libraryStatus },
+    { name: 'Registrar', status: latestRequest.registrarStatus }
+  ];
+
+  const clearedCount = departments.filter(d => d.status === 'cleared').length;
+  const pendingCount = departments.filter(d => d.status === 'pending').length;
+  const notClearedCount = departments.filter(d => d.status === 'not_cleared').length;
+  const totalProgress = (clearedCount / 3) * 100;
+
+  studentProgressChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Cleared', 'Pending', 'Not Cleared'],
+      datasets: [{
+        data: [clearedCount, pendingCount, notClearedCount],
+        backgroundColor: ['#1f9254', palette.gold, '#c0392b'],
+        borderWidth: 0,
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: palette.text,
+            usePointStyle: true,
+            padding: 12
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const label = context.label || '';
+              const value = context.parsed || 0;
+              return `${label}: ${value} department${value !== 1 ? 's' : ''}`;
+            }
+          }
+        }
+      },
+      cutout: '70%'
+    },
+    plugins: [{
+      id: 'progressText',
+      beforeDraw: (chart) => {
+        const ctx = chart.ctx;
+        const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
+        const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
+        
+        ctx.save();
+        ctx.font = 'bold 24px Poppins';
+        ctx.fillStyle = palette.blue;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${Math.round(totalProgress)}%`, centerX, centerY - 10);
+        
+        ctx.font = '14px Poppins';
+        ctx.fillStyle = palette.text;
+        ctx.fillText('Complete', centerX, centerY + 15);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+function updateCertificateVisibility(requests) {
+  if (!requests || requests.length === 0) {
+    hideCertificateSections();
+    return;
+  }
+
+  // Check if any request is approved
+  const hasApprovedRequest = requests.some(req => req.overallStatus === 'approved');
+  
+  const certificateSection = document.querySelector('#certificateSection');
+  const alumniPrompt = document.querySelector('#alumniPrompt');
+
+  if (hasApprovedRequest) {
+    // Show certificate section and alumni prompt
+    if (certificateSection) {
+      certificateSection.classList.remove('hidden');
+      generateQRCode(requests.find(req => req.overallStatus === 'approved'));
+    }
+    if (alumniPrompt) {
+      alumniPrompt.classList.remove('hidden');
+    }
+  } else {
+    hideCertificateSections();
+  }
+}
+
+function hideCertificateSections() {
+  const certificateSection = document.querySelector('#certificateSection');
+  const alumniPrompt = document.querySelector('#alumniPrompt');
+  
+  if (certificateSection) certificateSection.classList.add('hidden');
+  if (alumniPrompt) alumniPrompt.classList.add('hidden');
+}
+
+function generateQRCode(approvedRequest) {
+  const container = document.querySelector('#qrCodeContainer');
+  const studentIdEl = document.querySelector('#qrStudentId');
+  
+  if (!container) return;
+
+  // Clear existing QR code
+  container.innerHTML = '';
+
+  // Generate unique QR code data
+  const qrData = JSON.stringify({
+    studentId: currentProfile?.studentId || '',
+    studentUid: currentUser?.uid || '',
+    requestId: approvedRequest?.id || '',
+    status: 'approved',
+    clearedDate: new Date().toISOString(),
+    institution: 'USIU-Africa'
+  });
+
+  // Generate QR code using qrcode library
+  if (typeof QRCode !== 'undefined') {
+    const canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+    
+    QRCode.toCanvas(canvas, qrData, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#1A237E',
+        light: '#ffffff'
+      },
+      errorCorrectionLevel: 'H'
+    }, (error) => {
+      if (error) {
+        console.error('Error generating QR code:', error);
+        container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed. Please refresh the page.</p>';
+      }
+    });
+  } else {
+    // Fallback: use qrcodejs if available
+    if (typeof window.QRCode !== 'undefined') {
+      try {
+        new window.QRCode(container, {
+          text: qrData,
+          width: 200,
+          height: 200,
+          colorDark: '#1A237E',
+          colorLight: '#ffffff'
+        });
+      } catch (error) {
+        console.error('Error generating QR code:', error);
+        container.innerHTML = '<p style="color: red; padding: 20px;">QR code generation failed.</p>';
+      }
+    } else {
+      container.innerHTML = '<p style="color: #666; padding: 20px;">QR code library not loaded. Please refresh the page.</p>';
+    }
+  }
+
+  if (studentIdEl) {
+    studentIdEl.textContent = currentProfile?.studentId || 'N/A';
+  }
+}
+
+function printCertificate() {
+  const approvedRequest = studentRequests.find(req => req.overallStatus === 'approved');
+  if (!approvedRequest) {
+    showToast('No approved clearance found.');
+    return;
+  }
+
+  const printWindow = window.open('', '_blank');
+  const qrDataUrl = document.querySelector('#qrCodeContainer canvas')?.toDataURL() || '';
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Clearance Certificate - USIU-Africa</title>
+      <style>
+        @page { margin: 20mm; }
+        body {
+          font-family: 'Poppins', Arial, sans-serif;
+          margin: 0;
+          padding: 40px;
+          color: #2c3e50;
+        }
+        .certificate {
+          border: 4px solid #1A237E;
+          padding: 40px;
+          text-align: center;
+          background: white;
+        }
+        .header {
+          color: #1A237E;
+          margin-bottom: 30px;
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 32px;
+          font-weight: 700;
+        }
+        .header p {
+          margin: 5px 0;
+          font-size: 16px;
+          color: #FDB913;
+        }
+        .content {
+          margin: 40px 0;
+        }
+        .content h2 {
+          color: #1A237E;
+          font-size: 24px;
+          margin-bottom: 20px;
+        }
+        .student-info {
+          background: #f8f9fa;
+          padding: 20px;
+          border-radius: 8px;
+          margin: 20px 0;
+          text-align: left;
+        }
+        .student-info p {
+          margin: 8px 0;
+          font-size: 14px;
+        }
+        .status-badge {
+          display: inline-block;
+          background: #1f9254;
+          color: white;
+          padding: 10px 20px;
+          border-radius: 20px;
+          font-weight: 600;
+          margin: 20px 0;
+        }
+        .qr-section {
+          margin: 30px 0;
+        }
+        .qr-section img {
+          width: 150px;
+          height: 150px;
+        }
+        .footer {
+          margin-top: 40px;
+          font-size: 12px;
+          color: #666;
+        }
+        .signature {
+          margin-top: 40px;
+          display: flex;
+          justify-content: space-around;
+        }
+        .signature div {
+          text-align: center;
+        }
+        .signature-line {
+          border-top: 2px solid #1A237E;
+          width: 200px;
+          margin: 40px auto 10px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="certificate">
+        <div class="header">
+          <h1>UNITED STATES INTERNATIONAL UNIVERSITY - AFRICA</h1>
+          <p>OFFICIAL CLEARANCE CERTIFICATE</p>
+        </div>
+        <div class="content">
+          <h2>CERTIFICATE OF CLEARANCE</h2>
+          <p style="font-size: 16px; margin: 20px 0;">
+            This is to certify that
+          </p>
+          <div class="student-info">
+            <p><strong>Name:</strong> ${currentProfile?.fullName || 'N/A'}</p>
+            <p><strong>Student ID:</strong> ${currentProfile?.studentId || 'N/A'}</p>
+            <p><strong>Email:</strong> ${currentUser?.email || 'N/A'}</p>
+            <p><strong>Request ID:</strong> ${approvedRequest.id}</p>
+            <p><strong>Date Cleared:</strong> ${formatDate(approvedRequest.updatedAt)}</p>
+          </div>
+          <div class="status-badge">
+            ✓ FULLY CLEARED FOR GRADUATION
+          </div>
+          <p style="margin: 20px 0; font-size: 14px;">
+            Has been cleared by all departments (Finance, Library, and Registrar) and is eligible to proceed with graduation.
+          </p>
+          ${qrDataUrl ? `
+          <div class="qr-section">
+            <p style="font-size: 12px; margin-bottom: 10px;">Verification QR Code:</p>
+            <img src="${qrDataUrl}" alt="QR Code" />
+          </div>
+          ` : ''}
+        </div>
+        <div class="signature">
+          <div>
+            <div class="signature-line"></div>
+            <p>Registrar's Office</p>
+          </div>
+          <div>
+            <div class="signature-line"></div>
+            <p>Date: ${formatDate(new Date())}</p>
+          </div>
+        </div>
+        <div class="footer">
+          <p>This is an official document issued by USIU-Africa</p>
+          <p>For verification, scan the QR code above</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+  setTimeout(() => {
+    printWindow.print();
+  }, 250);
+}
+
+function downloadCertificate() {
+  if (typeof window.jspdf === 'undefined') {
+    showToast('PDF library not loaded. Using print instead.');
+    printCertificate();
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const approvedRequest = studentRequests.find(req => req.overallStatus === 'approved');
+  
+  if (!approvedRequest) {
+    showToast('No approved clearance found.');
+    return;
+  }
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  // Certificate content
+  doc.setFontSize(20);
+  doc.setTextColor(26, 35, 126);
+  doc.text('UNITED STATES INTERNATIONAL UNIVERSITY - AFRICA', 105, 30, { align: 'center' });
+  
+  doc.setFontSize(14);
+  doc.setTextColor(253, 185, 19);
+  doc.text('OFFICIAL CLEARANCE CERTIFICATE', 105, 40, { align: 'center' });
+
+  doc.setFontSize(18);
+  doc.setTextColor(26, 35, 126);
+  doc.text('CERTIFICATE OF CLEARANCE', 105, 55, { align: 'center' });
+
+  doc.setFontSize(12);
+  doc.setTextColor(44, 62, 80);
+  doc.text('This is to certify that', 105, 70, { align: 'center' });
+
+  // Student info box
+  doc.setDrawColor(26, 35, 126);
+  doc.setFillColor(248, 249, 250);
+  doc.rect(20, 80, 170, 50, 'FD');
+  
+  doc.setFontSize(11);
+  doc.text(`Name: ${currentProfile?.fullName || 'N/A'}`, 25, 90);
+  doc.text(`Student ID: ${currentProfile?.studentId || 'N/A'}`, 25, 100);
+  doc.text(`Email: ${currentUser?.email || 'N/A'}`, 25, 110);
+  doc.text(`Request ID: ${approvedRequest.id}`, 25, 120);
+  doc.text(`Date Cleared: ${formatDate(approvedRequest.updatedAt)}`, 25, 130);
+
+  // Status badge
+  doc.setFillColor(31, 146, 84);
+  doc.rect(60, 140, 90, 15, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.text('✓ FULLY CLEARED FOR GRADUATION', 105, 150, { align: 'center' });
+
+  doc.setTextColor(44, 62, 80);
+  doc.setFontSize(10);
+  doc.text('Has been cleared by all departments and is eligible to proceed with graduation.', 105, 170, { align: 'center', maxWidth: 160 });
+
+  // QR Code if available
+  const qrCanvas = document.querySelector('#qrCodeContainer canvas');
+  if (qrCanvas) {
+    const qrDataUrl = qrCanvas.toDataURL();
+    doc.addImage(qrDataUrl, 'PNG', 85, 180, 40, 40);
+    doc.setFontSize(8);
+    doc.text('Verification QR Code', 105, 225, { align: 'center' });
+  }
+
+  // Footer
+  doc.setFontSize(8);
+  doc.text('This is an official document issued by USIU-Africa', 105, 260, { align: 'center' });
+  doc.text('For verification, scan the QR code above', 105, 265, { align: 'center' });
+
+  // Save PDF
+  const fileName = `Clearance_Certificate_${currentProfile?.studentId || 'certificate'}_${new Date().getTime()}.pdf`;
+  doc.save(fileName);
+  showToast('Certificate downloaded successfully!');
 }
 
 function initialiseAdminDashboard() {
