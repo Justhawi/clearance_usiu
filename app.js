@@ -79,8 +79,59 @@ let adminFilter = { term: '', status: 'all' };
 let charts = { status: null, trend: null, department: null };
 let currentModalHolds = [];
 
+// EmailJS Configuration
+// TODO: Replace with your EmailJS credentials
+// Get these from https://www.emailjs.com/
+// Steps to set up:
+// 1. Sign up at https://www.emailjs.com/
+// 2. Create an email service (Gmail, Outlook, etc.)
+// 3. Create email templates for student and admin notifications
+// 4. Get your Public Key from Account > API Keys
+// 5. Replace the values below with your actual credentials
+const EMAILJS_CONFIG = {
+  serviceId: 'YOUR_SERVICE_ID', // e.g., 'service_xxxxx'
+  templateIdStudent: 'YOUR_STUDENT_TEMPLATE_ID', // Template for student notifications
+  templateIdAdmin: 'YOUR_ADMIN_TEMPLATE_ID', // Template for admin notifications
+  publicKey: 'scvGfuHbYIRdv6G-g', // e.g., 'scvGfuHbYIRdv6G-g'
+  // Optional: Admin email override (if not using Firestore admin profiles)
+  adminEmail: 'admin@usiu.ac.ke' // Default admin email for notifications
+};
+
+// Track previous request statuses to detect changes
+const previousRequestStatuses = new Map();
+
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM Content Loaded');
+  
+  // Initialize EmailJS when page loads
+  const checkEmailJS = () => {
+    // Check multiple ways EmailJS might be loaded
+    const emailjsLib = typeof emailjs !== 'undefined' ? emailjs : 
+                      (typeof window !== 'undefined' && typeof window.emailjs !== 'undefined' ? window.emailjs : null);
+    
+    if (emailjsLib) {
+      initializeEmailJS();
+      return true;
+    }
+    return false;
+  };
+  
+  // Try to initialize immediately
+  if (!checkEmailJS()) {
+    // If not available, wait for it to load
+    const checkInterval = setInterval(() => {
+      if (checkEmailJS()) {
+        clearInterval(checkInterval);
+      }
+    }, 100);
+    
+    // Stop checking after 5 seconds
+    setTimeout(() => clearInterval(checkInterval), 5000);
+  }
+  
+  // Also check when window loads
+  window.addEventListener('load', checkEmailJS);
+  
   initialiseNav();
   initialiseLoginModal();
 
@@ -585,6 +636,17 @@ function subscribeToStudentRequests() {
         studentRequests = snapshot.docs.map(mapRequest);
         console.log('Mapped requests:', studentRequests.length);
         
+        // Initialize status tracking for new requests (only for new ones)
+        studentRequests.forEach((req) => {
+          if (!previousRequestStatuses.has(req.id)) {
+            // First time seeing this request - don't send notification yet
+            previousRequestStatuses.set(req.id, req.overallStatus);
+          } else {
+            // Request already tracked - check for status changes
+            checkAndNotifyStatusChange(req);
+          }
+        });
+        
         // Debug: Log each request's status
         studentRequests.forEach((req, idx) => {
           console.log(`Request ${idx + 1}:`, {
@@ -762,7 +824,7 @@ function setupNewRequest() {
     submitButton.textContent = 'Submitting...';
 
     try {
-      await addDoc(collection(db, 'clearance_requests'), {
+      const newRequestRef = await addDoc(collection(db, 'clearance_requests'), {
         studentUid: currentUser.uid,
         studentName: currentProfile.fullName || '',
         studentNumber: currentProfile.studentId || '',
@@ -775,6 +837,28 @@ function setupNewRequest() {
         registrarStatus: 'pending',
         comments: ''
       });
+      
+      // Create request object for email notification
+      const newRequest = {
+        id: newRequestRef.id,
+        studentUid: currentUser.uid,
+        studentName: currentProfile.fullName || '',
+        studentNumber: currentProfile.studentId || '',
+        email: currentUser.email || '',
+        requestDate: new Date(),
+        updatedAt: new Date(),
+        overallStatus: 'pending',
+        feeStatus: 'pending',
+        libraryStatus: 'pending',
+        registrarStatus: 'pending',
+        comments: ''
+      };
+      
+      // Send email notification to admin about new request
+      sendAdminNewRequestEmail(newRequest).catch(error => {
+        console.error('Email notification failed (non-blocking):', error);
+      });
+      
       modal?.classList.remove('active');
       showToast('New clearance request submitted successfully.');
     } catch (error) {
@@ -1813,6 +1897,11 @@ async function handleAdminModalSubmit(event) {
   submitButton.textContent = 'Saving...';
 
   try {
+    // Get the current request to check previous status
+    const currentRequestDoc = await getDoc(doc(db, 'clearance_requests', requestId));
+    const currentRequestData = currentRequestDoc.data();
+    const previousStatus = currentRequestData?.overallStatus || 'pending';
+    
     await updateDoc(doc(db, 'clearance_requests', requestId), {
       feeStatus,
       libraryStatus,
@@ -1822,6 +1911,24 @@ async function handleAdminModalSubmit(event) {
       holds: holdsPayload,
       updatedAt: serverTimestamp()
     });
+    
+    // If status changed, send email notification to student
+    if (previousStatus !== overallStatus) {
+      console.log(`Admin updated request ${requestId}: ${previousStatus} → ${overallStatus}`);
+      
+      // Fetch the updated request to send notification
+      const updatedRequestDoc = await getDoc(doc(db, 'clearance_requests', requestId));
+      const updatedRequestData = updatedRequestDoc.data();
+      
+      if (updatedRequestData) {
+        const updatedRequest = mapRequest(updatedRequestDoc);
+        // Send email notification asynchronously (non-blocking)
+        sendStudentStatusEmail(updatedRequest, previousStatus).catch(error => {
+          console.error('Email notification failed (non-blocking):', error);
+        });
+      }
+    }
+    
     showToast('Request updated successfully.');
     modal.classList.remove('active');
     currentModalHolds = [];
@@ -2515,4 +2622,221 @@ function resetHoldForm() {
     descriptionInput.value = '';
   }
 }
+
+// ==================== EMAIL NOTIFICATION FUNCTIONS ====================
+
+/**
+ * Check if EmailJS is properly configured
+ */
+function isEmailJSConfigured() {
+  const emailjsLib = typeof emailjs !== 'undefined' ? emailjs : 
+                    (typeof window !== 'undefined' && typeof window.emailjs !== 'undefined' ? window.emailjs : null);
+  
+  const isConfigured = EMAILJS_CONFIG.serviceId !== 'YOUR_SERVICE_ID' &&
+         EMAILJS_CONFIG.templateIdStudent !== 'YOUR_STUDENT_TEMPLATE_ID' &&
+         EMAILJS_CONFIG.templateIdAdmin !== 'YOUR_ADMIN_TEMPLATE_ID' &&
+         EMAILJS_CONFIG.publicKey !== 'YOUR_PUBLIC_KEY' &&
+         emailjsLib !== null;
+  
+  if (!isConfigured) {
+    console.warn('EmailJS not fully configured. Please check EMAILJS_CONFIG in app.js');
+  }
+  
+  return isConfigured;
+}
+
+/**
+ * Initialize EmailJS
+ */
+function initializeEmailJS() {
+  const emailjsLib = typeof emailjs !== 'undefined' ? emailjs : 
+                    (typeof window !== 'undefined' && typeof window.emailjs !== 'undefined' ? window.emailjs : null);
+  
+  if (!emailjsLib) {
+    console.warn('EmailJS library not found');
+    return false;
+  }
+  
+  if (EMAILJS_CONFIG.publicKey === 'YOUR_PUBLIC_KEY' || !EMAILJS_CONFIG.publicKey) {
+    console.warn('EmailJS not configured. Please set EMAILJS_CONFIG in app.js');
+    return false;
+  }
+  
+  try {
+    emailjsLib.init(EMAILJS_CONFIG.publicKey);
+    console.log('EmailJS initialized successfully');
+    return true;
+  } catch (error) {
+    console.warn('EmailJS initialization failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Send email notification to student about clearance status change
+ */
+async function sendStudentStatusEmail(request, previousStatus = null) {
+  if (!isEmailJSConfigured()) {
+    console.warn('EmailJS not configured. Skipping student email notification.');
+    return;
+  }
+
+  if (!request || !request.email) {
+    console.warn('Student email not available. Skipping email notification.');
+    return;
+  }
+
+  try {
+    const statusMessages = {
+      'pending': 'Your clearance request is currently pending review by the departments. We will notify you once the review is complete.',
+      'approved': 'Congratulations! Your clearance request has been approved. You are now cleared for graduation. You can download your clearance certificate from your dashboard.',
+      'cleared': 'Congratulations! Your clearance request has been cleared. You are now cleared for graduation. You can download your clearance certificate from your dashboard.',
+      'rejected': 'Your clearance request has been rejected. Please review the comments below and take necessary action. You may need to resolve any outstanding issues before resubmitting.',
+      'not_cleared': 'Your clearance request has not been cleared. Please review the comments below and take necessary action. You may need to resolve any outstanding issues before resubmitting.'
+    };
+
+    const statusMessage = statusMessages[request.overallStatus] || statusMessages['pending'];
+    const statusLabel = formatStatus(request.overallStatus);
+
+    const templateParams = {
+      to_email: request.email,
+      to_name: request.studentName || 'Student',
+      student_name: request.studentName || 'Student',
+      student_id: request.studentNumber || 'N/A',
+      request_id: request.id,
+      status: statusLabel,
+      status_message: statusMessage,
+      fee_status: formatStatus(request.feeStatus),
+      library_status: formatStatus(request.libraryStatus),
+      registrar_status: formatStatus(request.registrarStatus),
+      request_date: formatDate(request.requestDate),
+      updated_date: formatDate(request.updatedAt),
+      comments: request.comments || 'No additional comments.',
+      previous_status: previousStatus ? formatStatus(previousStatus) : 'N/A',
+      dashboard_url: window.location.origin + '/student.html'
+    };
+
+    const emailjsLib = typeof emailjs !== 'undefined' ? emailjs : 
+                      (typeof window !== 'undefined' && typeof window.emailjs !== 'undefined' ? window.emailjs : null);
+    
+    if (!emailjsLib) {
+      throw new Error('EmailJS library not available');
+    }
+
+    await emailjsLib.send(
+      EMAILJS_CONFIG.serviceId,
+      EMAILJS_CONFIG.templateIdStudent,
+      templateParams
+    );
+
+    console.log('✓ Student status email sent successfully to:', request.email);
+  } catch (error) {
+    console.error('✗ Failed to send student status email:', error);
+    // Don't show error to user - email failures shouldn't block the workflow
+    // But log it for debugging
+  }
+}
+
+/**
+ * Send email notification to admin about new clearance request
+ */
+async function sendAdminNewRequestEmail(request) {
+  if (!isEmailJSConfigured()) {
+    console.warn('EmailJS not configured. Skipping admin email notification.');
+    return;
+  }
+
+  if (!request) {
+    console.warn('Request data not available. Skipping admin email notification.');
+    return;
+  }
+
+  // Get admin email(s) - you can configure this or fetch from Firestore
+  // For now, we'll use a default admin email or fetch from profiles
+  let adminEmails = [EMAILJS_CONFIG.adminEmail || 'admin@usiu.ac.ke']; // Default admin email
+
+  try {
+    // Try to fetch admin emails from Firestore
+    const adminProfilesQuery = query(
+      collection(db, 'profiles'),
+      where('role', '==', 'admin')
+    );
+    const adminSnapshot = await getDocs(adminProfilesQuery);
+    
+    if (!adminSnapshot.empty) {
+      // Collect all admin emails
+      adminEmails = adminSnapshot.docs
+        .map(doc => doc.data().email)
+        .filter(email => email && email.trim() !== '');
+      
+      // If no admin emails found, use default
+      if (adminEmails.length === 0) {
+        adminEmails = [EMAILJS_CONFIG.adminEmail || 'admin@usiu.ac.ke'];
+      }
+    }
+  } catch (error) {
+    console.warn('Could not fetch admin email from Firestore, using default:', error);
+  }
+
+  // Send email to all admin emails
+  const emailPromises = adminEmails.map(async (adminEmail) => {
+    try {
+      const templateParams = {
+        to_email: adminEmail,
+        to_name: 'Administrator',
+        student_name: request.studentName || 'Unknown Student',
+        student_id: request.studentNumber || 'N/A',
+        student_email: request.email || 'N/A',
+        request_id: request.id,
+        request_date: formatDate(request.requestDate),
+        dashboard_url: window.location.origin + '/admin.html'
+      };
+
+      const emailjsLib = typeof emailjs !== 'undefined' ? emailjs : 
+                           (typeof window !== 'undefined' && typeof window.emailjs !== 'undefined' ? window.emailjs : null);
+      
+      if (!emailjsLib) {
+        throw new Error('EmailJS library not available');
+      }
+
+      await emailjsLib.send(
+        EMAILJS_CONFIG.serviceId,
+        EMAILJS_CONFIG.templateIdAdmin,
+        templateParams
+      );
+
+      console.log('✓ Admin new request email sent successfully to:', adminEmail);
+    } catch (error) {
+      console.error(`✗ Failed to send admin email to ${adminEmail}:`, error);
+      // Continue with other admin emails even if one fails
+    }
+  });
+
+  // Wait for all emails to be sent (or fail)
+  await Promise.allSettled(emailPromises);
+}
+
+/**
+ * Check if request status has changed and send notification if needed
+ */
+function checkAndNotifyStatusChange(request) {
+  if (!request || !request.id) {
+    return;
+  }
+  
+  const previousStatus = previousRequestStatuses.get(request.id);
+  const currentStatus = request.overallStatus;
+  
+  // If status changed, send notification
+  if (previousStatus !== currentStatus && previousStatus !== undefined) {
+    console.log(`Status changed for request ${request.id}: ${previousStatus} → ${currentStatus}`);
+    sendStudentStatusEmail(request, previousStatus).catch(error => {
+      console.error('Failed to send status change notification:', error);
+    });
+  }
+  
+  // Update stored status (even if it's the first time we see it)
+  previousRequestStatuses.set(request.id, currentStatus);
+}
+
 
