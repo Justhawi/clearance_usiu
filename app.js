@@ -89,12 +89,12 @@ let currentModalHolds = [];
 // 4. Get your Public Key from Account > API Keys
 // 5. Replace the values below with your actual credentials
 const EMAILJS_CONFIG = {
-  serviceId: 'YOUR_SERVICE_ID', // e.g., 'service_xxxxx'
-  templateIdStudent: 'YOUR_STUDENT_TEMPLATE_ID', // Template for student notifications
-  templateIdAdmin: 'YOUR_ADMIN_TEMPLATE_ID', // Template for admin notifications
+  serviceId: 'service_gm92ove', // e.g., 'service_xxxxx'
+  templateIdStudent: 'template_0r4z9gf', // Template for student notifications
+  templateIdAdmin: 'template_r05ciuj', // Template for admin notifications
   publicKey: 'scvGfuHbYIRdv6G-g', // e.g., 'scvGfuHbYIRdv6G-g'
   // Optional: Admin email override (if not using Firestore admin profiles)
-  adminEmail: 'admin@usiu.ac.ke' // Default admin email for notifications
+  adminEmail: 'mihawi02onyango@gmail.com' // Default admin email for notifications
 };
 
 // Track previous request statuses to detect changes
