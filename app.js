@@ -1702,6 +1702,35 @@ function renderAdminRequests(requests) {
       ${renderHoldsSummary(request.holds, true)}
       <div class="divider"></div>
       <p>${request.comments || 'No comments yet.'}</p>
+      <div class="request-actions">
+        <button
+          class="btn btn-primary"
+          type="button"
+          data-action="clear"
+          data-request-id="${request.id}"
+        >
+          <i data-lucide="shield-check"></i>
+          Clear Student
+        </button>
+        <button
+          class="btn btn-secondary"
+          type="button"
+          data-action="pending"
+          data-request-id="${request.id}"
+        >
+          <i data-lucide="clock-3"></i>
+          Mark Pending
+        </button>
+        <button
+          class="btn btn-danger"
+          type="button"
+          data-action="reject"
+          data-request-id="${request.id}"
+        >
+          <i data-lucide="x-octagon"></i>
+          Reject Request
+        </button>
+      </div>
     `;
     container.appendChild(card);
   });
@@ -1807,6 +1836,17 @@ function setupAdminModal() {
   container?.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    const actionButton = target.closest('button[data-action]');
+    if (actionButton instanceof HTMLButtonElement) {
+      const action = actionButton.dataset.action;
+      const requestId = actionButton.dataset.requestId;
+      if (action && requestId) {
+        event.preventDefault();
+        event.stopPropagation();
+        handleAdminQuickAction(requestId, action, actionButton);
+        return;
+      }
+    }
     const card = target.closest('.admin-card');
     if (!card) return;
     const request = adminRequests.find((item) => item.id === card.dataset.requestId);
@@ -1939,6 +1979,100 @@ async function handleAdminModalSubmit(event) {
   } finally {
     submitButton.disabled = false;
     submitButton.textContent = originalText;
+  }
+}
+
+async function handleAdminQuickAction(requestId, action, actionButton) {
+  const actionPresets = {
+    clear: {
+      confirm: 'Mark this student as fully cleared? All departments will be set to Cleared.',
+      statuses: { fee: 'cleared', library: 'cleared', registrar: 'cleared' },
+      resolveHolds: true,
+      comment: 'Cleared by admin dashboard',
+      toast: 'Student marked as cleared.'
+    },
+    reject: {
+      confirm: 'Reject this clearance request? All departments will be marked as Not Cleared.',
+      statuses: { fee: 'not_cleared', library: 'not_cleared', registrar: 'not_cleared' },
+      comment: 'Request rejected by admin dashboard',
+      toast: 'Request rejected and student notified.'
+    },
+    pending: {
+      confirm: 'Move this request back to Pending? All departments will be reset to Pending.',
+      statuses: { fee: 'pending', library: 'pending', registrar: 'pending' },
+      comment: 'Request returned to pending review by admin dashboard',
+      toast: 'Request returned to pending.'
+    }
+  };
+
+  const preset = actionPresets[action];
+  if (!preset || !requestId) return;
+
+  if (!window.confirm(preset.confirm)) {
+    return;
+  }
+
+  const buttonEl = actionButton instanceof HTMLButtonElement ? actionButton : null;
+  if (buttonEl) {
+    buttonEl.disabled = true;
+  }
+
+  try {
+    const requestRef = doc(db, 'clearance_requests', requestId);
+    const currentRequestDoc = await getDoc(requestRef);
+    const currentRequestData = currentRequestDoc.data();
+
+    if (!currentRequestData) {
+      showToast('Request could not be found.');
+      return;
+    }
+
+    const previousStatus = currentRequestData.overallStatus || 'pending';
+    const feeStatus = preset.statuses.fee || currentRequestData.feeStatus || 'pending';
+    const libraryStatus = preset.statuses.library || currentRequestData.libraryStatus || 'pending';
+    const registrarStatus = preset.statuses.registrar || currentRequestData.registrarStatus || 'pending';
+    const holds = Array.isArray(currentRequestData.holds) ? currentRequestData.holds.map(normaliseHold) : [];
+    const updatedHolds = preset.resolveHolds
+      ? holds.map((hold) => ({ ...hold, resolved: true }))
+      : holds;
+
+    const note = `${preset.comment} (${new Date().toLocaleString()})`;
+    const comments = preset.comment
+      ? [note, currentRequestData.comments].filter(Boolean).join('\n')
+      : currentRequestData.comments || '';
+
+    const overallStatus = computeOverallStatus(feeStatus, libraryStatus, registrarStatus);
+    const holdsPayload = updatedHolds.map(serializeHold);
+
+    await updateDoc(requestRef, {
+      feeStatus,
+      libraryStatus,
+      registrarStatus,
+      comments,
+      overallStatus,
+      holds: holdsPayload,
+      updatedAt: serverTimestamp()
+    });
+
+    if (normaliseOverallStatus(previousStatus) !== overallStatus) {
+      const updatedRequestDoc = await getDoc(requestRef);
+      const updatedRequestData = updatedRequestDoc.data();
+      if (updatedRequestData) {
+        const updatedRequest = mapRequest(updatedRequestDoc);
+        sendStudentStatusEmail(updatedRequest, previousStatus).catch((error) => {
+          console.error('Email notification failed (non-blocking):', error);
+        });
+      }
+    }
+
+    showToast(preset.toast || 'Request updated successfully.');
+  } catch (error) {
+    console.error('Failed to process admin action:', error);
+    showToast('Failed to update request. Please try again.');
+  } finally {
+    if (buttonEl) {
+      buttonEl.disabled = false;
+    }
   }
 }
 
